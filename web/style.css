@@ -272,7 +272,51 @@ html, body {
 /* -------------------------------------------------------------- itinerary */
 
 /* Route options, like a map app's: fastest first, the chosen one highlighted. */
-#result-block { scroll-margin-top: 34px; }   /* clear of the phone sheet's handle */
+#result-block { scroll-margin-top: 34px; }
+
+/* ---------------------------------------------------------- trip alerts */
+.trip { display: flex; flex-direction: column; gap: 8px; margin: 0 0 16px; }
+.trip__start {
+  width: 100%; padding: 13px; border: 0; border-radius: var(--radius); cursor: pointer;
+  background: #f5b642; color: #1b1405; font: inherit; font-size: 15px; font-weight: 700;
+}
+.trip__start:hover { filter: brightness(1.05); }
+.trip .ghost { margin-top: 0; }
+.trip__sim { font-size: 12.5px; }
+.trip__status {
+  margin: 2px 0 0; padding: 10px 12px; border-radius: var(--radius);
+  background: var(--panel-2); border: 1px solid var(--line);
+  font-size: 13px; line-height: 1.45; color: var(--ink-dim);
+}
+.trip__status b { color: var(--ink); }
+.trip__note { margin: 0; font-size: 11px; color: var(--ink-faint); }
+
+/* The alarm covers everything until it is acknowledged. */
+.alarm {
+  position: fixed; inset: 0; z-index: 5000;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  background: rgba(8,10,14,.82);
+}
+.alarm[hidden] { display: none; }
+.alarm__box {
+  width: min(420px, 100%); text-align: center;
+  padding: 28px 22px 22px; border-radius: 18px;
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+}
+.alarm.is-loud .alarm__box { border-color: #f5b642; animation: alarm-pulse 1.6s ease-in-out infinite; }
+@keyframes alarm-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,182,66,.55), 0 20px 60px rgba(0,0,0,.6); }
+  50%      { box-shadow: 0 0 0 18px rgba(245,182,66,0), 0 20px 60px rgba(0,0,0,.6); }
+}
+@media (prefers-reduced-motion: reduce) { .alarm.is-loud .alarm__box { animation: none; } }
+.alarm__icon { font-size: 44px; line-height: 1; }
+.alarm h2 { margin: 12px 0 8px; font-size: 22px; }
+.alarm p { margin: 0 0 20px; color: var(--ink-dim); font-size: 15px; line-height: 1.45; }
+.alarm button {
+  width: 100%; padding: 15px; border: 0; border-radius: var(--radius); cursor: pointer;
+  background: #f5b642; color: #1b1405; font: inherit; font-size: 17px; font-weight: 700;
+}   /* clear of the phone sheet's handle */
 .options { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
 .option {
   display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; align-items: baseline;

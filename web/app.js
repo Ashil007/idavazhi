@@ -298,6 +298,8 @@ el("clear").addEventListener("click", function () {
   state.planning = false;
   state.origin = state.destination = null;
   state.options = null;
+  ALERTS.stop();
+  el("trip").hidden = true;
   el("plan").disabled = false;
   el("plan").textContent = "Plan journey";
   ["origin", "destination"].forEach(function (r) {
@@ -414,6 +416,7 @@ function renderPlan(plan, fit) {
     map.fitBounds(L.latLngBounds(all), SHEET.fitOptions(45));
   }
   renderOptions(plan);
+  ALERTS.attach(plan);
 
   /* ---- summary ---- */
   var s = plan.summary;
@@ -485,6 +488,7 @@ function escapeHtml(text) {
 
 buildModes();
 SHEET.init();
+ALERTS.init();
 setActive("origin");
 locateUser();
 

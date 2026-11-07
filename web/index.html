@@ -9,6 +9,14 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+<div class="alarm" id="alarm" hidden role="alertdialog" aria-labelledby="alarm-title">
+  <div class="alarm__box">
+    <div class="alarm__icon" aria-hidden="true">&#9200;</div>
+    <h2 id="alarm-title"></h2>
+    <p id="alarm-body"></p>
+    <button type="button" id="alarm-ok">I'm awake</button>
+  </div>
+</div>
 <div class="app">
   <aside class="panel">
     <div class="sheet-handle" id="sheet-handle" role="button" tabindex="0"
@@ -71,6 +79,13 @@
     <section class="block" id="result-block" hidden>
       <div class="options" id="options" hidden></div>
       <div class="summary" id="summary"></div>
+      <div class="trip" id="trip" hidden>
+        <button type="button" class="trip__start" id="trip-start">Wake me before my stop</button>
+        <button type="button" class="ghost trip__sim" id="trip-sim">Try it: simulate the ride</button>
+        <button type="button" class="ghost" id="trip-stop" hidden>Stop trip alerts</button>
+        <p class="trip__status" id="trip-status" hidden></p>
+        <p class="trip__note">Keep this page open during the trip - the screen stays on while alerts run.</p>
+      </div>
       <ol class="itinerary" id="itinerary"></ol>
       <ul class="notes" id="notes"></ul>
     </section>
@@ -94,6 +109,7 @@
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <script src="basemap.js"></script>
 <script src="sheet.js"></script>
+<script src="alerts.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
