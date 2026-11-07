@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OSM Transit Navigator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <header class="panel__head">
+      <h1>Transit Navigator</h1>
+      <p class="sub">Shortest-path routing over live OpenStreetMap data</p>
+    </header>
+
+    <section class="block">
+      <h2 class="block__title">Mode of transport</h2>
+      <div class="modes" id="modes"></div>
+    </section>
+
+    <section class="block">
+      <h2 class="block__title">To and from the stop</h2>
+      <div class="modes modes--two" id="access"></div>
+    </section>
+
+    <section class="block">
+      <h2 class="block__title">Points</h2>
+      <div class="point" id="point-origin" data-role="origin">
+        <span class="point__dot point__dot--origin"></span>
+        <div class="point__body">
+          <span class="point__label">Start</span>
+          <span class="point__value" id="value-origin">Click the map to set</span>
+        </div>
+        <button class="mini" id="locate" title="Use your current location as the start">Locate</button>
+        <button class="mini" data-random="origin" title="Pick a random point in view">Random</button>
+      </div>
+      <div class="point" id="point-destination" data-role="destination">
+        <span class="point__dot point__dot--destination"></span>
+        <div class="point__body">
+          <span class="point__label">Destination</span>
+          <span class="point__value" id="value-destination">Click the map to set</span>
+        </div>
+        <button class="mini" data-random="destination" title="Pick a random point in view">Random</button>
+      </div>
+      <p class="hint" id="hint">Clicking the map sets the highlighted point.</p>
+      <p class="where" id="where" hidden></p>
+    </section>
+
+    <section class="block">
+      <h2 class="block__title">Find a place</h2>
+      <form class="search" id="search-form" autocomplete="off">
+        <input id="search-input" type="search" placeholder="e.g. Indiranagar, Bengaluru" />
+        <button type="submit" class="mini">Go</button>
+      </form>
+      <ul class="results" id="search-results" hidden></ul>
+    </section>
+
+    <button class="plan" id="plan">Plan journey</button>
+    <button class="ghost" id="clear">Clear</button>
+
+    <section class="block" id="status-block" hidden>
+      <h2 class="block__title">Progress</h2>
+      <ul class="status" id="status"></ul>
+    </section>
+
+    <section class="block" id="result-block" hidden>
+      <div class="options" id="options" hidden></div>
+      <div class="summary" id="summary"></div>
+      <ol class="itinerary" id="itinerary"></ol>
+      <ul class="notes" id="notes"></ul>
+    </section>
+
+    <p class="offline" id="offline" hidden></p>
+
+    <footer class="panel__foot">
+      Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
+      contributors. Routing computed locally from OSM geometry &mdash; not a timetable.
+    </footer>
+  </aside>
+
+  <main class="map-wrap">
+    <div id="map"></div>
+    <div class="legend" id="legend" hidden></div>
+  </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
+<script src="basemap.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

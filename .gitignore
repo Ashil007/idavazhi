@@ -1,0 +1,13 @@
+# Downloaded and generated data (rebuilt by the app and tools/)
+.cache/
+*.pbf
+*.mbtiles
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Paid IRCTC "Trains at a Glance" e-book: personal use only, never commit it
+TAG-*.pdf
+*.TAG.pdf
