@@ -11,7 +11,7 @@ from transitnav.server import serve
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Vazhi Transit")
+    ap = argparse.ArgumentParser(description="Vazhi")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")
@@ -52,8 +52,13 @@ def main() -> int:
     if not args.no_preload:
         preload.start_background(region)
 
+    # The place-name index for the destination search, rebuilt whenever the
+    # map tiles are newer than it (about a minute, in the background).
+    from transitnav import places
+    places.build_in_background(log=lambda m: print(m, flush=True))
+
     url = "http://%s:%d/" % (args.host, args.port)
-    print("Vazhi Transit is running at " + url)
+    print("Vazhi is running at " + url)
     print("Map data (c) OpenStreetMap contributors. Press Ctrl+C to stop.")
     if not args.no_browser:
         webbrowser.open(url)

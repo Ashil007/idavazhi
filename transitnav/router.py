@@ -44,7 +44,7 @@ VALHALLA_COSTING = {"foot": "pedestrian", "scooter": "motor_scooter", "bus": "bu
                     "car": "auto"}
 OSRM_PROFILE = {"foot": "foot", "scooter": "car", "bus": "car", "car": "car"}
 
-USER_AGENT = "vazhi-transit/1.0 (local journey planner; stdlib urllib)"
+USER_AGENT = "vazhi/1.0 (local journey planner; stdlib urllib)"
 TIMEOUT_S = 6        # it normally answers in well under a second
 COOLDOWN_S = 60
 FAILS_TO_SIDELINE = 2

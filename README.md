@@ -1,4 +1,4 @@
-# Vazhi Transit (വഴി)
+# Vazhi (വഴി)
 
 *Vazhi* is Malayalam for "the way". Public-transport journey planning for
 Kerala on OpenStreetMap data. Pick two points on the map,

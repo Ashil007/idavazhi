@@ -117,7 +117,7 @@ def probe_mirrors(timeout: float = 8.0) -> dict:
     return results
 
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "vazhi-transit/1.0 (local journey planner; stdlib urllib)"
+USER_AGENT = "vazhi/1.0 (local journey planner; stdlib urllib)"
 
 CACHE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".cache", "overpass"
@@ -813,11 +813,23 @@ def parse_stops(data: dict):
     return out
 
 
-def geocode(text: str, limit: int = 6):
-    """Forward-geocode a place name through Nominatim."""
-    params = urllib.parse.urlencode(
-        {"q": text, "format": "jsonv2", "limit": str(limit), "addressdetails": "0"}
-    )
+_geocode_cache: dict = {}
+
+
+def geocode(text: str, limit: int = 6, near=None):
+    """Forward-geocode a place name through Nominatim (the online backup to
+    the local place index). `near` (lat, lon) prefers results around it.
+    Answers are remembered for the life of the server: the service asks
+    clients not to repeat queries."""
+    key = (text.strip().lower(), limit, None if near is None else (round(near[0], 1), round(near[1], 1)))
+    if key in _geocode_cache:
+        return _geocode_cache[key]
+    query = {"q": text, "format": "jsonv2", "limit": str(limit), "addressdetails": "0"}
+    if near is not None:
+        # A box about 150 km around the user: preferred, not a limit.
+        query["viewbox"] = "%.3f,%.3f,%.3f,%.3f" % (near[1] - 1.4, near[0] + 1.4,
+                                                    near[1] + 1.4, near[0] - 1.4)
+    params = urllib.parse.urlencode(query)
     req = urllib.request.Request(
         NOMINATIM + "?" + params,
         headers={"User-Agent": USER_AGENT, "Accept-Encoding": "gzip"},
@@ -828,12 +840,14 @@ def geocode(text: str, limit: int = 6):
         if resp.headers.get("Content-Encoding") == "gzip":
             raw = gzip.decompress(raw)
     results = json.loads(raw.decode("utf-8", "replace"))
-    return [
-        {
-            "name": r.get("display_name"),
-            "lat": float(r["lat"]),
-            "lon": float(r["lon"]),
-            "kind": r.get("type"),
-        }
-        for r in results
-    ]
+    out = []
+    for r in results:
+        full = r.get("display_name") or ""
+        parts = [p.strip() for p in full.split(",") if p.strip()]
+        name = r.get("name") or (parts[0] if parts else full)
+        rest = ", ".join(p for p in parts[1:4] if p != name)
+        kind = (r.get("type") or r.get("category") or "place").replace("_", " ").capitalize()
+        out.append({"name": name, "detail": kind + (" \u00b7 " + rest if rest else ""),
+                    "lat": float(r["lat"]), "lon": float(r["lon"]), "source": "online"})
+    _geocode_cache[key] = out
+    return out

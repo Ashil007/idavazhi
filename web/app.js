@@ -1,4 +1,4 @@
-/* Vazhi Transit - map interaction and journey rendering. */
+/* Vazhi - map interaction and journey rendering. */
 "use strict";
 
 var MODES = {
@@ -75,9 +75,11 @@ function changeIcon(color) {
   });
 }
 
-function setPoint(role, latlng) {
+function setPoint(role, latlng, name) {
   state[role] = { lat: latlng.lat, lon: latlng.lng };
-  el("value-" + role).textContent = latlng.lat.toFixed(5) + ", " + latlng.lng.toFixed(5);
+  var label = name || latlng.lat.toFixed(5) + ", " + latlng.lng.toFixed(5);
+  if (role === "destination") el("dest-input").value = name || "Point on the map (" + label + ")";
+  else el("value-" + role).textContent = label;
   drawPoints();
   prefetch(state[role]);
   if (role === "origin" && !state.destination) setActive("destination");
@@ -170,34 +172,67 @@ document.querySelectorAll(".point").forEach(function (row) {
 
 /* --------------------------------------------------------------- search */
 
-el("search-form").addEventListener("submit", function (ev) {
-  ev.preventDefault();
-  var q = el("search-input").value.trim();
-  if (!q) return;
-  var list = el("search-results");
-  list.hidden = false;
-  list.innerHTML = "<li>Searching...</li>";
-  fetch("/api/search?q=" + encodeURIComponent(q))
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      list.innerHTML = "";
-      if (data.error || !data.results || !data.results.length) {
-        list.innerHTML = "<li>Nothing found.</li>";
-        return;
-      }
-      data.results.forEach(function (r) {
-        var li = document.createElement("li");
-        li.textContent = r.name;
-        li.addEventListener("click", function () {
-          map.setView([r.lat, r.lon], 15);
-          setPoint(state.active, L.latLng(r.lat, r.lon));
-          list.hidden = true;
-        });
-        list.appendChild(li);
-      });
-    })
-    .catch(function () { list.innerHTML = "<li>Search failed.</li>"; });
-});
+// Destination search: suggestions from every named place in Kerala as you
+// type (the server's local index), online search as a backup.
+(function () {
+  var input = el("dest-input"), list = el("dest-suggest");
+  var timer = null, items = [], active = -1, asked = 0;
+
+  function near() {
+    var p = state.origin || (map ? { lat: map.getCenter().lat, lon: map.getCenter().lng } : null);
+    return p ? "&lat=" + p.lat.toFixed(4) + "&lon=" + p.lon.toFixed(4) : "";
+  }
+  function close() { list.hidden = true; active = -1; }
+  function choose(r) {
+    setPoint("destination", L.latLng(r.lat, r.lon), r.name);
+    close();
+    input.blur();
+    map.setView([r.lat, r.lon], Math.max(map.getZoom(), 14));
+  }
+  function show(results, empty) {
+    items = results;
+    active = -1;
+    list.innerHTML = results.length ? results.map(function (r, i) {
+      return '<li role="option" data-i="' + i + '"><span class="s-name">' + escapeHtml(r.name) +
+             '</span><span class="s-detail">' + escapeHtml(r.detail || "") + "</span></li>";
+    }).join("") : '<li class="s-empty">' + escapeHtml(empty) + "</li>";
+    list.hidden = false;
+    Array.prototype.forEach.call(list.querySelectorAll("[data-i]"), function (li) {
+      // mousedown, not click: it fires before the input loses focus.
+      li.addEventListener("mousedown", function (e) { e.preventDefault(); choose(items[+li.getAttribute("data-i")]); });
+    });
+  }
+  function ask(full) {
+    var q = input.value.trim();
+    if (q.length < 2) { close(); return; }
+    var ticket = ++asked;
+    fetch("/api/search?q=" + encodeURIComponent(q) + near() + (full ? "&full=1" : ""))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (ticket !== asked) return;          // an older answer arriving late
+        show(d.results || [], "No place found - try another spelling, or tap the map.");
+      })
+      .catch(function () { if (ticket === asked) show([], "Search failed - check the connection."); });
+  }
+  input.addEventListener("focus", function () { setActive("destination"); if (input.value.trim().length >= 2) ask(false); });
+  input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(function () { ask(false); }, 150); });
+  input.addEventListener("blur", function () { setTimeout(close, 150); });
+  input.addEventListener("keydown", function (e) {
+    var lis = list.querySelectorAll("[data-i]");
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (!lis.length) return;
+      e.preventDefault();
+      active = (active + (e.key === "ArrowDown" ? 1 : -1) + lis.length) % lis.length;
+      lis.forEach(function (li, i) { li.classList.toggle("is-active", i === active); });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (active >= 0 && items[active]) choose(items[active]);
+      else ask(true);                           // Enter: also search online
+    } else if (e.key === "Escape") {
+      close();
+    }
+  });
+})();
 
 /* ------------------------------------------------------------- progress */
 
@@ -303,7 +338,8 @@ el("clear").addEventListener("click", function () {
   el("plan").disabled = false;
   el("plan").textContent = "Plan journey";
   ["origin", "destination"].forEach(function (r) {
-    el("value-" + r).textContent = "Click the map to set";
+    if (r === "destination") el("dest-input").value = "";
+    else el("value-" + r).textContent = "Click the map to set";
   });
   routeLayer.clearLayers();
   pointLayer.clearLayers();

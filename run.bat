@@ -1,5 +1,5 @@
 @echo off
-REM Launch Vazhi Transit.
+REM Launch Vazhi.
 cd /d "%~dp0"
 python serve.py %*
 if errorlevel 1 (

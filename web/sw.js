@@ -1,4 +1,4 @@
-/* Vazhi Transit service worker - only for trip-alert notifications.
+/* Vazhi service worker - only for trip-alert notifications.
  * Android shows web notifications only through a service worker; tapping
  * one brings the open trip page back to the front. Nothing is cached. */
 "use strict";

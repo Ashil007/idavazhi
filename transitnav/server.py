@@ -16,7 +16,7 @@ import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import basemap, locate, overpass, preload
+from . import basemap, locate, overpass, places, preload
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -105,6 +105,38 @@ class Handler(BaseHTTPRequestHandler):
         with open(full, "rb") as fh:
             self._send(200, fh.read(), ctype)
 
+    def _search(self, params):
+        """Places for the destination box, as the user types.
+
+        The local index of every named place in the Kerala map answers at
+        once. The online search (Nominatim) is asked only when the local
+        one finds little - a place outside Kerala, or before the index is
+        built - or when the user presses Enter (`full=1`)."""
+        q = (params.get("q") or [""])[0].strip()
+        if len(q) < 2:
+            self._json(200, {"results": []})
+            return
+        near = None
+        try:
+            near = (float(params["lat"][0]), float(params["lon"][0]))
+            if not (math.isfinite(near[0]) and math.isfinite(near[1])):
+                near = None
+        except (KeyError, IndexError, ValueError):
+            near = None
+        results = places.search(q, near=near, limit=8)
+        if len(results) < 3 or (params.get("full") or ["0"])[0] == "1":
+            try:
+                online = overpass.geocode(q, limit=6, near=near)
+            except Exception:  # noqa: BLE001 - offline: the local results stand
+                online = []
+            for r in online:
+                # Skip what the local index already listed at about the same spot.
+                if not any(r["name"].lower() == l["name"].lower()
+                           and abs(r["lat"] - l["lat"]) < 0.01 and abs(r["lon"] - l["lon"]) < 0.01
+                           for l in results):
+                    results.append(r)
+        self._json(200, {"results": results[:10]})
+
     def _tile(self, route):
         """/tiles/{z}/{x}/{y}.pbf from the local map (see basemap.py)."""
         try:
@@ -142,11 +174,7 @@ class Handler(BaseHTTPRequestHandler):
                     "access": [{"id": k, "label": v["label"], "speed_kmh": v["speed_kmh"]}
                                for k, v in ACCESS_MODES.items()]})
             elif route == "/api/search":
-                q = (params.get("q") or [""])[0].strip()
-                if not q:
-                    self._json(400, {"error": "Empty search query."})
-                else:
-                    self._json(200, {"results": overpass.geocode(q)})
+                self._search(params)
             elif route == "/api/plan":
                 self._plan_stream(params)
             elif route == "/api/mapinfo":

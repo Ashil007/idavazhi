@@ -15,8 +15,9 @@
 "use strict";
 
 var ALERTS = (function () {
-  var WAKE_M = 2000;        // wake the rider this far before the stop...
+  var WAKE_M = 2000;        // "auto": wake the rider this far before the stop...
   var WAKE_S = 240;         // ...or this many seconds before, at current speed
+  var SETTING = "vazhi.alarmDistance";   // the rider's own choice, kept on this device
   var ARRIVE_M = 150;       // "this is your stop"
   var SIM_SECONDS = 70;     // demo: the whole trip in about this long
 
@@ -135,6 +136,27 @@ var ALERTS = (function () {
 
   /* ----------------------------------------------------- tracking */
 
+  // "auto": 2 km, or 4 minutes ahead at the current speed if that is
+  // farther. Otherwise exactly the distance the rider picked.
+  function wakeDistance() {
+    var chosen = el("trip-distance") ? el("trip-distance").value : "auto";
+    if (chosen !== "auto" && Number(chosen) > 0) return Number(chosen);
+    return Math.max(WAKE_M, speed ? speed * WAKE_S : 0);
+  }
+
+  function loadSetting() {
+    var box = el("trip-distance");
+    if (!box) return;
+    try {
+      var saved = window.localStorage.getItem(SETTING);
+      if (saved && box.querySelector('option[value="' + saved + '"]')) box.value = saved;
+    } catch (e) { /* storage blocked: the default stays */ }
+    box.addEventListener("change", function () {
+      try { window.localStorage.setItem(SETTING, box.value); } catch (e) { /* not kept */ }
+      update();                       // a running trip uses the new distance at once
+    });
+  }
+
   function nextTarget() {
     for (var i = 0; i < targets.length; i++) {
       if (!fired[i + ":arrive"]) return i;
@@ -163,7 +185,7 @@ var ALERTS = (function () {
     var t = targets[i];
     var dist = haversine(last.at, t.at);
     var secs = speed && speed > 1 ? dist / speed : null;
-    var wakeAt = Math.max(WAKE_M, speed ? speed * WAKE_S : 0);
+    var wakeAt = wakeDistance();
 
     if (dist <= ARRIVE_M && !fired[i + ":arrive"]) {
       fired[i + ":arrive"] = fired[i + ":wake"] = true;
@@ -315,6 +337,7 @@ var ALERTS = (function () {
     el("trip-sim").addEventListener("click", simulate);
     el("trip-stop").addEventListener("click", function () { stop("Trip alerts are off."); });
     el("alarm-ok").addEventListener("click", silence);
+    loadSetting();
     // Phones drop the screen lock when the page is hidden; take it back.
     document.addEventListener("visibilitychange", function () {
       if (running && document.visibilityState === "visible") keepAwake();

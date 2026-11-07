@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Vazhi Transit</title>
+<title>Vazhi</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 <link rel="stylesheet" href="style.css" />
@@ -22,7 +22,7 @@
     <div class="sheet-handle" id="sheet-handle" role="button" tabindex="0"
          aria-label="Drag or tap to resize the panel"><span></span></div>
     <header class="panel__head">
-      <h1>Vazhi <span class="brand-ml" lang="ml">വഴി</span> <span class="brand-sub">Transit</span></h1>
+      <h1>Vazhi <span class="brand-ml" lang="ml">വഴി</span></h1>
       <p class="sub">Bus, train and metro across Kerala &mdash; door to door</p>
     </header>
 
@@ -51,22 +51,17 @@
         <span class="point__dot point__dot--destination"></span>
         <div class="point__body">
           <span class="point__label">Destination</span>
-          <span class="point__value" id="value-destination">Click the map to set</span>
+          <input class="point__input" id="dest-input" type="search" autocomplete="off"
+                 placeholder="Where to? Search a place" aria-label="Destination"
+                 aria-autocomplete="list" aria-controls="dest-suggest" />
         </div>
         <button class="mini" data-random="destination" title="Pick a random point in view">Random</button>
       </div>
+      <ul class="suggest" id="dest-suggest" role="listbox" hidden></ul>
       <p class="hint" id="hint">Clicking the map sets the highlighted point.</p>
       <p class="where" id="where" hidden></p>
     </section>
 
-    <section class="block">
-      <h2 class="block__title">Find a place</h2>
-      <form class="search" id="search-form" autocomplete="off">
-        <input id="search-input" type="search" placeholder="e.g. Indiranagar, Bengaluru" />
-        <button type="submit" class="mini">Go</button>
-      </form>
-      <ul class="results" id="search-results" hidden></ul>
-    </section>
 
     <button class="plan" id="plan">Plan journey</button>
     <button class="ghost" id="clear">Clear</button>
@@ -80,6 +75,17 @@
       <div class="options" id="options" hidden></div>
       <div class="summary" id="summary"></div>
       <div class="trip" id="trip" hidden>
+        <label class="trip__when">Ring the alarm
+          <select id="trip-distance">
+            <option value="auto">2 km or 4 min before (auto)</option>
+            <option value="500">500 m before</option>
+            <option value="1000">1 km before</option>
+            <option value="2000">2 km before</option>
+            <option value="3000">3 km before</option>
+            <option value="5000">5 km before</option>
+            <option value="10000">10 km before</option>
+          </select>
+        </label>
         <button type="button" class="trip__start" id="trip-start">Wake me before my stop</button>
         <button type="button" class="ghost trip__sim" id="trip-sim">Try it: simulate the ride</button>
         <button type="button" class="ghost" id="trip-stop" hidden>Stop trip alerts</button>
