@@ -62,6 +62,25 @@ With the routing server running, walking, riding and bus routes in Kerala are
 answered by this computer in milliseconds. The app asks it first and falls
 back to the public servers elsewhere, or when it is not running.
 
+### On your phone (trip alarm)
+
+After planning a trip, **Wake me before <stop>** follows your location and
+sounds a loud alarm about 2 km or 4 minutes before each change and your final
+stop, then "This is your stop" on arrival. **Try it: simulate the ride**
+shows it working without travelling. Keep the page open; the screen stays on
+while alerts run.
+
+Phones allow location and notifications only on secure (https) pages. With
+the app running, this gives your phone a temporary https link:
+
+```bash
+python tools/phone_link.py
+```
+
+Open the `https://….trycloudflare.com` address it prints on your phone, and
+press Ctrl+C to close it. While it runs, anyone with the link can open the
+app, so don't post it publicly.
+
 ### Long-distance trains
 
 Train trips up to 300 km follow the OSM track around the trip, as above.
@@ -165,6 +184,7 @@ transitnav/
 tools/
   build_map.py      builds the Kerala map tiles with tilemaker (Docker)
   routing_server.py starts/stops your own Valhalla routing server (Docker)
+  phone_link.py     temporary https link so the app (and trip alarm) works on a phone
   timetable.py      Indian Railways timetable: download, index, train search
   router.py         street routing (Valhalla, OSRM) for walk, ride and bus legs
   geo.py            distances, bounding boxes, corridors, polyline maths
