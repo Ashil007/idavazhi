@@ -1,4 +1,4 @@
-/* OSM Transit Navigator - a calm dark control panel beside a bright map. */
+/* Vazhi Transit - a calm dark control panel beside a bright map. */
 
 :root {
   --bg: #11151c;
@@ -43,9 +43,12 @@ html, body {
 
 .panel__head h1 {
   margin: 0;
-  font-size: 19px;
+  font-size: 21px;
   letter-spacing: -0.01em;
 }
+/* "വഴി" - Malayalam for "the way" - beside the name, and a quieter "Transit". */
+.panel__head .brand-ml { color: var(--accent); font-weight: 600; font-size: 0.9em; }
+.panel__head .brand-sub { color: var(--ink-dim); font-weight: 500; }
 
 .sub {
   margin: 4px 0 0;

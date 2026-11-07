@@ -1,6 +1,7 @@
-# OSM Transit Navigator
+# Vazhi Transit (വഴി)
 
-Public-transport journey planning on OpenStreetMap. Pick two points on the map,
+*Vazhi* is Malayalam for "the way". Public-transport journey planning for
+Kerala on OpenStreetMap data. Pick two points on the map,
 choose **bus**, **train** or **metro**, choose whether you get to and from the
 stops on foot or by **two-wheeler**, and the app works out:
 

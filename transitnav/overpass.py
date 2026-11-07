@@ -117,7 +117,7 @@ def probe_mirrors(timeout: float = 8.0) -> dict:
     return results
 
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "osm-transit-navigator/1.0 (local routing tool; stdlib urllib)"
+USER_AGENT = "vazhi-transit/1.0 (local journey planner; stdlib urllib)"
 
 CACHE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".cache", "overpass"

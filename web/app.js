@@ -1,4 +1,4 @@
-/* OSM Transit Navigator - map interaction and journey rendering. */
+/* Vazhi Transit - map interaction and journey rendering. */
 "use strict";
 
 var MODES = {

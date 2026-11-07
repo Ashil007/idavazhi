@@ -11,7 +11,7 @@ from transitnav.server import serve
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="OSM Transit Navigator")
+    ap = argparse.ArgumentParser(description="Vazhi Transit")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")
@@ -53,7 +53,7 @@ def main() -> int:
         preload.start_background(region)
 
     url = "http://%s:%d/" % (args.host, args.port)
-    print("OSM Transit Navigator is running at " + url)
+    print("Vazhi Transit is running at " + url)
     print("Map data (c) OpenStreetMap contributors. Press Ctrl+C to stop.")
     if not args.no_browser:
         webbrowser.open(url)

@@ -1,5 +1,5 @@
 @echo off
-REM Launch the OSM Transit Navigator.
+REM Launch Vazhi Transit.
 cd /d "%~dp0"
 python serve.py %*
 if errorlevel 1 (
