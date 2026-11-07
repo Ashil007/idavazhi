@@ -269,6 +269,7 @@ html, body {
 /* -------------------------------------------------------------- itinerary */
 
 /* Route options, like a map app's: fastest first, the chosen one highlighted. */
+#result-block { scroll-margin-top: 34px; }   /* clear of the phone sheet's handle */
 .options { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
 .option {
   display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; align-items: baseline;
@@ -419,10 +420,53 @@ html, body {
   box-shadow: 0 1px 4px rgba(0,0,0,.5);
 }
 
+/* ---------------------------------------------------------- phone layout */
+/* The map fills the screen and the panel becomes a bottom sheet over it
+   (sheet.js moves it between peek, half and full). */
+
+.sheet-handle { display: none; }
+
 @media (max-width: 860px) {
-  .app { flex-direction: column; }
-  .panel { width: 100%; flex: 0 0 auto; max-height: 54vh; border-right: 0; border-bottom: 1px solid var(--line); }
-  .map-wrap { flex: 1 1 46vh; min-height: 300px; }
+  html, body { font-size: 15px; overflow: hidden; }
+  .app { display: block; }
+  .map-wrap { position: fixed; inset: 0; }
+
+  .panel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000;
+    width: auto; flex: none;
+    height: 92vh; height: 92dvh;
+    border-right: 0; border-top: 1px solid var(--line);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -10px 30px rgba(0,0,0,.45);
+    padding: 0 16px calc(28px + env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+    transform: translateY(48%);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .panel.is-dragging { transition: none; }
+
+  .sheet-handle {
+    display: flex; justify-content: center; align-items: center;
+    position: sticky; top: 0; z-index: 2;
+    height: 26px; margin: 0 -16px 4px;
+    background: var(--panel); border-radius: 18px 18px 0 0;
+    cursor: grab; touch-action: none;
+  }
+  .sheet-handle span { width: 42px; height: 5px; border-radius: 3px; background: var(--ink-faint); }
+
+  .panel__head h1 { font-size: 18px; }
+  .block { margin-top: 18px; }
+
+  /* Fingers, not mouse pointers: bigger targets. */
+  .mode { padding: 13px 6px 11px; font-size: 13px; }
+  .point { min-height: 56px; }
+  .mini { padding: 8px 11px; }
+  .plan { padding: 15px; font-size: 16px; }
+  /* 16px stops phones zooming the page when the box is tapped. */
+  .search input { font-size: 16px; padding: 11px 12px; }
+
+  .legend { top: 10px; right: 10px; bottom: auto; }
+  .leaflet-control-attribution { font-size: 9px; }
 }
 
 /* Interchange: a station where the route changes line. */

@@ -11,6 +11,8 @@
 <body>
 <div class="app">
   <aside class="panel">
+    <div class="sheet-handle" id="sheet-handle" role="button" tabindex="0"
+         aria-label="Drag or tap to resize the panel"><span></span></div>
     <header class="panel__head">
       <h1>Transit Navigator</h1>
       <p class="sub">Shortest-path routing over live OpenStreetMap data</p>
@@ -91,6 +93,7 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <script src="basemap.js"></script>
+<script src="sheet.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -239,6 +239,7 @@ function planJourney() {
   }
 
   state.planning = true;
+  SHEET.set("half");             // phones: show the progress, keep some map
   el("plan").disabled = true;
   el("plan").textContent = "Planning...";
   el("result-block").hidden = true;
@@ -265,6 +266,7 @@ function planJourney() {
     finish();
     pushStatus("Done.", "");
     showOptions(JSON.parse(ev.data));
+    SHEET.set("half");
     el("result-block").scrollIntoView({ block: "start", behavior: "smooth" });
   });
 
@@ -409,7 +411,7 @@ function renderPlan(plan, fit) {
     (state.options || [plan]).forEach(function (o) {
       o.legs.forEach(function (l) { all = all.concat(l.geometry || []); });
     });
-    map.fitBounds(L.latLngBounds(all), { padding: [45, 45] });
+    map.fitBounds(L.latLngBounds(all), SHEET.fitOptions(45));
   }
   renderOptions(plan);
 
@@ -482,6 +484,7 @@ function escapeHtml(text) {
 /* ----------------------------------------------------------------- init */
 
 buildModes();
+SHEET.init();
 setActive("origin");
 locateUser();
 
@@ -519,6 +522,12 @@ pollOffline();
 // the start. Refused or unavailable: ask the server for the district of this
 // internet connection and show that instead - roughly right, never a pin.
 
+// Once the user has placed a point or planned a trip, a late answer about
+// where they are must not move the map away from it.
+function userIsBusy() {
+  return !!(state.options || state.origin || state.destination || state.planning);
+}
+
 function setWhere(html) {
   var w = el("where");
   w.innerHTML = html;
@@ -540,7 +549,11 @@ function locateUser() {
       icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }),
       interactive: true, zIndexOffset: 900
     }).addTo(whereLayer).bindTooltip("You are here", { direction: "top", offset: [0, -8] });
-    map.setView(here, Math.max(map.getZoom(), 15));
+    if (!userIsBusy()) {
+      map.setView(here, Math.max(map.getZoom(), 15));
+      // On a phone, nudge the map so "you are here" sits above the sheet.
+      if (SHEET.covered()) map.panBy([0, Math.round(SHEET.covered() / 2)], { animate: false });
+    }
     // Your position is the natural start - unless one was set meanwhile.
     if (!state.origin) {
       setPoint("origin", here);
@@ -564,15 +577,16 @@ function showDistrict(why) {
       whereLayer.clearLayers();
       var name = d.district || d.city || "your area";
       var label = name + (d.state && d.state !== name ? ", " + d.state : "");
+      var busy = userIsBusy();      // never pull the map off the user's own trip
       if (d.outline) {
         var shape = L.geoJSON(d.outline, {
           style: { color: "#4da3ff", weight: 2, dashArray: "6 6", fillOpacity: 0.05 },
           interactive: false
         }).addTo(whereLayer);
-        map.fitBounds(shape.getBounds(), { padding: [30, 30] });
+        if (!busy) map.fitBounds(shape.getBounds(), SHEET.fitOptions(30));
       } else if (d.bbox) {
-        map.fitBounds([[d.bbox[0], d.bbox[1]], [d.bbox[2], d.bbox[3]]], { padding: [30, 30] });
-      } else {
+        if (!busy) map.fitBounds([[d.bbox[0], d.bbox[1]], [d.bbox[2], d.bbox[3]]], SHEET.fitOptions(30));
+      } else if (!busy) {
         map.setView([d.lat, d.lon], 11);
       }
       L.tooltip({ permanent: true, direction: "center", className: "district-label" })
