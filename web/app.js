@@ -393,14 +393,17 @@ function pushStatus(message, kind, stage) {
 function planJourney() {
   if (state.planning) return;
   if (!state.mode) {
-    resetStatus();
-    pushStatus("Choose Bus, Train or Metro first.", "is-error");
+    NOTICE.show({ tone: "info", title: "How will you travel?",
+                  text: "Tap Bus, Train or Metro, then Plan journey." });
     el("modes").scrollIntoView({ block: "nearest", behavior: "smooth" });
     return;
   }
   if (!state.origin || !state.destination) {
-    resetStatus();
-    pushStatus("Set both a start and a destination first.", "is-error");
+    NOTICE.show({ tone: "info",
+                  title: !state.origin && !state.destination ? "Where are you going?"
+                       : !state.origin ? "Where do you start?" : "Where are you going?",
+                  text: "Type a place in " + (!state.origin && !state.destination ? "Start and Destination"
+                        : !state.origin ? "Start" : "Destination") + ", or tap the map." });
     return;
   }
 
@@ -435,6 +438,7 @@ function planJourney() {
     pushStatus("Done.", "");
     showOptions(JSON.parse(ev.data));
     SHEET.set("half");
+    warnAbout(state.options[0]);
     // Phones: the trip moves to the top of the sheet (style.css, .has-result),
     // so its time and alarm show in the part of the sheet above the map.
     var panel = document.querySelector(".panel");
@@ -449,10 +453,25 @@ function planJourney() {
   // start the whole plan again from the beginning.
   source.addEventListener("error", function (ev) {
     if (settled) return;
-    var message = null;
-    try { message = JSON.parse(ev.data).error; } catch (e) { /* transport-level */ }
+    var info = null;
+    try { info = JSON.parse(ev.data); } catch (e) { /* transport-level */ }
     finish();
-    pushStatus(message || "Lost contact with the local server.", "is-error");
+    if (info && info.error) {
+      pushStatus(info.error, "is-error");
+      NOTICE.show({
+        tone: "error",
+        title: info.title || "Could not plan this trip",
+        text: info.error,
+        actions: (info.actions || []).map(toAction)
+      });
+    } else {
+      pushStatus("Lost contact with Vazhi's server.", "is-error");
+      NOTICE.show({
+        tone: "error", title: "No connection",
+        text: "Vazhi could not reach its server. Check your internet, then try again.",
+        actions: [{ label: "Try again", run: planJourney }]
+      });
+    }
   });
 
   function finish() {
@@ -465,6 +484,34 @@ function planJourney() {
 }
 
 el("plan").addEventListener("click", planJourney);
+
+// A button in a pop-up that plans again another way ("Use a two-wheeler").
+function toAction(a) {
+  return {
+    label: a.label,
+    run: function () {
+      if (a.mode) { var m = document.querySelector('#modes [data-id="' + a.mode + '"]'); if (m) m.click(); }
+      if (a.access) { var x = document.querySelector('#access [data-id="' + a.access + '"]'); if (x) x.click(); }
+      planJourney();
+    }
+  };
+}
+
+// What to know about a planned trip: once, in a pop-up, when it arrives.
+function warnAbout(plan) {
+  var w = (plan && plan.warnings) || [];
+  if (!w.length) return;
+  var act = w.filter(function (x) { return x.action && x.action.access !== state.access &&
+                                           x.action.mode !== state.mode; })[0];
+  NOTICE.show({
+    tone: "warn",
+    title: w.length === 1 ? w[0].title : w.length + " things to know about this trip",
+    text: w.length === 1 ? w[0].text : "",
+    items: w.length > 1 ? w : null,
+    actions: act ? [toAction(act.action)] : [],
+    okLabel: "Got it"
+  });
+}
 
 // Phones: back to the search boxes and modes at the top of the sheet; the
 // trip stays below them until it is planned again.
@@ -660,10 +707,17 @@ function renderPlan(plan, fit) {
     list.appendChild(li);
   });
 
-  /* ---- notes ---- */
+  /* ---- what to know (large), then the rest under "More about this trip" ---- */
+  var warns = plan.warnings || [];
+  el("warnings").innerHTML = warns.map(function (w) {
+    return '<div class="warning"><span class="warning__icon" aria-hidden="true">!</span>' +
+           "<div><b>" + escapeHtml(w.title) + "</b><span>" + escapeHtml(w.text) + "</span></div></div>";
+  }).join("");
+  el("warnings").hidden = !warns.length;
   el("notes").innerHTML = (plan.notes || []).map(function (n) {
     return "<li>" + escapeHtml(n) + "</li>";
   }).join("");
+  el("more").hidden = !(plan.notes || []).length;
 
   el("result-block").hidden = false;
 

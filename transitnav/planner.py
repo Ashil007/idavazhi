@@ -55,7 +55,21 @@ from .graph import Graph
 
 
 class PlanError(RuntimeError):
-    """A journey that cannot be planned, with a message meant for the user."""
+    """A journey that cannot be planned, with a message meant for the user.
+
+    `title` is the few words the pop-up shows in large type ("Nearest bus stop
+    is 10 km away"); `actions` are buttons that plan again another way, each
+    {"label", "mode"?, "access"?}.
+    """
+
+    def __init__(self, message, title=None, actions=None):
+        super().__init__(message)
+        self.title = title
+        self.actions = actions or []
+
+
+TWO_WHEELER = {"label": "Use a two-wheeler", "access": "two_wheeler"}
+TRY_BUS = {"label": "Try a bus", "mode": "bus"}
 
 
 def _stop_label(stop: dict, cfg: dict) -> str:
@@ -82,9 +96,9 @@ def _fetch_tiles(tiles, deg, build, report=None, what="map data"):
         return future.result(timeout=MAP_WAIT_S)
     except FuturesTimeout:
         raise PlanError(
-            "Downloading %s for this area from OpenStreetMap is taking a long time - "
-            "its free service is busy. It carries on in the background: try again in "
-            "a few minutes and it will load from disk." % what) from None
+            "Map data for this area is still downloading - the free map service is "
+            "busy. It carries on in the background: try again in a few minutes.",
+            title="The map is still loading") from None
 
 
 def _keep_stops(stops, cfg):
@@ -115,10 +129,10 @@ def _find_stops(origin, destination, cfg, acfg, report):
         bbox_around([origin, destination], buffer_m) if cfg["vehicle"] == "bus" else None), cfg)
     if not stops:
         raise PlanError(
-            "OpenStreetMap has no %s mapped anywhere near this route. "
-            "Try a different mode, or pick points in a city with %s coverage."
-            % (cfg["stop_noun"], cfg["label"].lower())
-        )
+            "The map has no %ss anywhere near this route yet. Try another way to "
+            "travel." % cfg["stop_noun"],
+            title="No %ss on the map here" % cfg["stop_noun"],
+            actions=[TRY_BUS] if cfg["vehicle"] != "bus" else [])
 
     # The limits in MODES are for walking; a two-wheeler covers several
     # times the distance in the same time, so it may reach farther stations.
@@ -169,19 +183,17 @@ def _find_stops(origin, destination, cfg, acfg, report):
         point = origin if not near_origin else destination
         closest = min(stops, key=lambda s: haversine(point[0], point[1], s["lat"], s["lon"]))
         far = haversine(point[0], point[1], closest["lat"], closest["lon"])
-        tips = []
+        actions = []
         if acfg["router"] == "foot":
-            tips.append("choose Two-wheeler to ride to a station farther away")
+            actions.append(TWO_WHEELER)
         if cfg["vehicle"] != "bus":
-            tips.append("try Bus")
+            actions.append(TRY_BUS)
         raise PlanError(
-            "No %s is within %s of %s - the closest is %s, %s away in a straight "
-            "line.%s" % (
+            "There is no %s within %s of %s. The closest one is %s." % (
                 cfg["stop_noun"], format_distance(max_access), end,
-                _stop_label(closest, cfg), format_distance(far),
-                (" To travel anyway, " + " or ".join(tips) + ".") if tips else "",
-            )
-        )
+                _stop_label(closest, cfg)),
+            title="Nearest %s is %s away" % (cfg["stop_noun"], format_distance(far)),
+            actions=actions)
     report("stops", "Found %s %ss nearby" % (format(len(stops), ","), cfg["stop_noun"]))
     return near_origin, near_dest, stops
 
@@ -248,7 +260,8 @@ def _build_network(area, filters, excludes, report, what, oneway_keys=None, tile
             report, "the %s network" % what)
         nodes, ways, directions = overpass.parse_network(data)
         if not ways:
-            raise PlanError("OpenStreetMap has no %s mapped around this trip." % what)
+            raise PlanError("The map has no %s around this trip yet." % what,
+                            title="Part of the map is missing here")
         graph = Graph.from_osm(nodes, ways, directions)
         report("network", "Built a graph of %s nodes and %s edges"
                % (format(graph.node_count, ","), format(graph.edge_count, ",")))
@@ -267,10 +280,9 @@ def _build_network(area, filters, excludes, report, what, oneway_keys=None, tile
             time.sleep(3.0 * (attempt + 1))
     if not ways:
         raise PlanError(
-            "Overpass (the public OpenStreetMap query service) kept returning no "
-            "%s data for an area where %ss exist. It is most likely overloaded - "
-            "please try again in a minute." % (what, what.split()[0])
-        )
+            "The free map service did not send the %s for this area - it is "
+            "probably busy. Please try again in a minute." % what,
+            title="The map service is busy")
     graph = Graph.from_osm(nodes, ways, directions)
     report("network", "Built a graph of %s nodes and %s edges"
            % (format(graph.node_count, ","), format(graph.edge_count, ",")))
@@ -404,10 +416,11 @@ def _route_transit(graph, origin_stops, dest_stops, cfg, report, access_mps):
             best = (secs, board, alight, coords, ride_m, changes)
     if best is None:
         raise PlanError(
-            "No %s route connects the stops near these two points. The %s network "
-            "in OpenStreetMap may be incomplete here, or the two points may be on "
-            "separate lines that do not meet." % (cfg["label"].lower(), cfg["label"].lower())
-        )
+            "No %s line joins the stops near these two places. They may be on "
+            "different lines, or the map may be missing part of the line."
+            % cfg["label"].lower(),
+            title="No %s route found" % cfg["label"].lower(),
+            actions=[TRY_BUS] if cfg["vehicle"] != "bus" else [])
     _, board, alight, coords, ride_m, changes = best
     skipped = sum(d < board["distance_m"] + alight["distance_m"] for d in dead)
     if skipped:
@@ -809,11 +822,14 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
         try:
             timetable.ensure(lambda m: None)
         except Exception as exc:  # noqa: BLE001
-            raise PlanError("Could not download the Indian Railways timetable (%s). "
-                            "Check your connection and try again." % exc) from None
+            print("  timetable download failed: %s" % exc)
+            raise PlanError("The Indian Railways timetable could not be downloaded. "
+                            "Check your internet connection and try again.",
+                            title="Train timetable not available") from None
         tt = timetable.load()
         if tt is None:
-            raise PlanError("The Indian Railways timetable could not be read.")
+            raise PlanError("The Indian Railways timetable could not be read.",
+                            title="Train timetable not available")
 
     report("stops", "Finding railway stations with long-distance trains near both ends")
     served = tt.served()
@@ -856,12 +872,11 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
         if not near:
             closest = min(served, key=lambda s: haversine(point[0], point[1], s["lat"], s["lon"]))
             far = haversine(point[0], point[1], closest["lat"], closest["lon"])
-            tip = (" Choose Two-wheeler to reach one farther away."
-                   if acfg["router"] == "foot" else "")
             raise PlanError(
-                "No railway station with trains in the timetable is within %s of %s - "
-                "the closest is %s, %s away.%s" % (
-                    format_distance(max_access), end, closest["name"], format_distance(far), tip))
+                "There is no railway station with trains within %s of %s. The closest "
+                "one is %s." % (format_distance(max_access), end, closest["name"]),
+                title="Nearest railway station is %s away" % format_distance(far),
+                actions=([TWO_WHEELER] if acfg["router"] == "foot" else []) + [TRY_BUS])
 
     report("route", "Searching %s trains for the fastest connection"
            % format(len(tt.trains), ","))
@@ -869,9 +884,10 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
                          {c: seconds(m) for c, (m, _) in near_d.items()})
     if not journeys:
         raise PlanError(
-            "No train in the timetable runs between stations near these two points, "
-            "directly or with one change. Try points nearer a main line or a big "
-            "junction, or Two-wheeler to reach one.")
+            "No train runs between stations near these two places, directly or with "
+            "one change.",
+            title="No train for this trip",
+            actions=([TWO_WHEELER] if acfg["router"] == "foot" else []) + [TRY_BUS])
     report("access", "Finding the shortest %s route to and from the stations"
            % acfg["label"].lower())
     car = _driving(origin, destination) if direct <= cfg["max_trip_m"] else None
@@ -934,24 +950,30 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
         total_s = sum(l["duration_s"] for l in legs)
         changes = [r["from"]["name"] for r in rides[1:]]
 
-        notes = []
+        notes, warnings = [], []
         if car is not None:
             notes.append("For comparison, driving straight there by car or taxi takes about "
                          "%s (%s)." % (format_duration(car[1]), format_distance(car[0])))
         walks = [l["distance_m"] for l in (access_leg, egress_leg) if l["type"] == "walk"]
         if walks and max(walks) > LONG_ACCESS_WARN_M:
-            notes.append("One walking leg is %s - consider Two-wheeler, or a bus or "
-                         "auto-rickshaw to the station." % format_distance(max(walks)))
+            warnings.append({
+                "title": "%s walk to the station" % format_distance(max(walks)),
+                "text": "That is a long way on foot. A two-wheeler, bus or auto-rickshaw "
+                        "to the station would be quicker.",
+                "action": TWO_WHEELER})
         if any(l.get("access") == "road" for l in (access_leg, egress_leg)):
-            notes.append("A station is beyond %s range, so that part is shown as a bus or "
-                         "auto-rickshaw ride (a taxi for long ones)." % (
-                             "walking" if access == "walk" else "riding"))
+            warnings.append({
+                "title": "The station is far away",
+                "text": "It is too far to %s, so that part is shown as a bus or "
+                        "auto-rickshaw ride (a taxi for long ones)." % (
+                            "walk" if access == "walk" else "ride")})
         if access_leg["approximate"] or egress_leg["approximate"]:
             notes.append("No road was found near one end, so that part is a straight-line "
                          "estimate.")
-        notes.append(
-            "Train times are from a 2016 timetable and some trains run only on certain "
-            "days - check the train on IRCTC or NTES before you travel.")
+        warnings.append({
+            "title": "Check your train before you go",
+            "text": "These train times are from an old (2016) timetable, and some trains "
+                    "do not run every day. Check the train on IRCTC or NTES first."})
         notes.append("The total time starts when the first train leaves.")
 
         names = [r["train"]["number"] + " " + r["train"]["name"] for r in rides]
@@ -967,6 +989,7 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
             "destination": {"lat": destination[0], "lon": destination[1]},
             "legs": legs,
             "notes": notes,
+            "warnings": warnings,
             "timetable": True,
             "option_label": option,
             "summary": {
@@ -1042,14 +1065,15 @@ def plan(origin, destination, mode, report=None, access="walk"):
 
     direct = haversine(origin[0], origin[1], destination[0], destination[1])
     if direct < 120:
-        raise PlanError("Those two points are practically the same place - just walk.")
+        raise PlanError("Your start and destination are only a short walk apart.",
+                        title="You are almost there")
     limit = cfg.get("long_trip_m", cfg["max_trip_m"])
     if direct > limit:
         raise PlanError(
-            "That is %s apart in a straight line, beyond the %s limit for %s "
-            "planning. Pick closer points or a different mode."
-            % (format_distance(direct), format_distance(limit), cfg["label"].lower())
-        )
+            "These places are %s apart. Vazhi plans %s trips up to %s. Pick closer "
+            "places, or another way to travel."
+            % (format_distance(direct), cfg["label"].lower(), format_distance(limit)),
+            title="Too far for a %s trip" % cfg["label"].lower())
 
     # Long train trips are planned from the Indian Railways timetable: real
     # trains and times, not a corridor of track downloaded around the trip.
@@ -1072,10 +1096,10 @@ def plan(origin, destination, mode, report=None, access="walk"):
     # Both ends served by the same stops: a vehicle cannot help here.
     if not _usable_pairs(near_origin, near_dest):
         raise PlanError(
-            "Your start and destination share the same nearby %ss (%s), so taking "
-            "the %s would not get you anywhere. Walk instead."
-            % (cfg["stop_noun"], _stop_label(near_origin[0], cfg), cfg["label"].lower())
-        )
+            "Your start and destination use the same nearby %s (%s), so the %s "
+            "would not take you anywhere."
+            % (cfg["stop_noun"], _stop_label(near_origin[0], cfg), cfg["label"].lower()),
+            title="Walking is better here")
 
     anchors = [origin, destination]
     anchors += [(s["lat"], s["lon"]) for s in near_origin + near_dest]
@@ -1091,10 +1115,10 @@ def plan(origin, destination, mode, report=None, access="walk"):
         areas = []   # the street router answered; no road network download
     elif mode == "bus" and direct > cfg.get("road_fallback_max_m", float("inf")):
         raise PlanError(
-            "The street routing service did not answer, and for a bus trip this long "
-            "the fallback - downloading every road along the way - would take far too "
-            "long. If Docker Desktop is closed, open it (your own routing server runs "
-            "there), or try again in a minute.")
+            "The route service did not answer, so a bus trip this long cannot be "
+            "worked out right now. Please try again in a minute. (If you run Vazhi "
+            "yourself: open Docker Desktop, where the route service runs.)",
+            title="Route service not answering")
 
     for attempt, area in enumerate(areas):
         if attempt:
@@ -1170,46 +1194,51 @@ def plan(origin, destination, mode, report=None, access="walk"):
     total_m = sum(l["distance_m"] for l in legs)
     total_s = sum(l["duration_s"] for l in legs)
 
-    notes = []
+    notes, warnings = [], []
     car = _driving(origin, destination)
     if car is not None:
         notes.append("For comparison, driving straight there by car or taxi takes about "
                      "%s (%s)." % (format_duration(car[1]), format_distance(car[0])))
     walk_s = direct * DETOUR_FACTOR / (ACCESS_MODES["walk"]["speed_kmh"] / 3.6)
     if walk_s < total_s:
-        notes.append("Walking straight there (about %s) is quicker than this %s trip."
-                     % (format_duration(walk_s), cfg["label"].lower()))
+        warnings.append({
+            "title": "Walking is quicker",
+            "text": "Walking straight there takes about %s - less than this %s trip."
+                    % (format_duration(walk_s), cfg["label"].lower())})
     if changes:
         notes.append("You change lines at %s - follow the station signs to the other "
                      "platform." % " and ".join(changes))
     longest_walk = max([l["distance_m"] for l in (access_leg, egress_leg)
                         if l["type"] == "walk"] or [0])
     if any(l.get("access") == "road" for l in (access_leg, egress_leg)):
-        notes.append("The %s is more than %s from your %s, so that part is shown as a bus "
-                     "or auto-rickshaw ride instead of a long walk." % (
-                         cfg["stop_noun"], format_distance(WALK_MAX_M),
-                         "start" if access_leg.get("access") == "road" else "destination"))
+        warnings.append({
+            "title": "The %s is far from your %s" % (
+                cfg["stop_noun"], "start" if access_leg.get("access") == "road" else "destination"),
+            "text": "It is more than %s away, so that part is shown as a bus or "
+                    "auto-rickshaw ride instead of a long walk." % format_distance(WALK_MAX_M),
+            "action": TWO_WHEELER if access == "walk" else None})
     if access == "walk" and longest_walk > LONG_ACCESS_WARN_M:
-        notes.append(
-            "One walking leg is %s. That is a long way on foot - consider "
-            "choosing Two-wheeler to ride it instead." % format_distance(longest_walk)
-        )
+        warnings.append({
+            "title": "%s walk to the %s" % (format_distance(longest_walk), cfg["stop_noun"]),
+            "text": "That is a long way on foot. A two-wheeler would be quicker.",
+            "action": TWO_WHEELER})
     street_m = access_leg["distance_m"] + egress_leg["distance_m"]
     if street_m > 2 * transit_m:
-        notes.append(
-            "The %s covers only %s of this %s trip - the %s line does not run "
-            "near one end. %s straight there may well be quicker." % (
-                cfg["label"].lower(), format_distance(transit_m), format_distance(total_m),
-                cfg["label"].lower(),
-                "Riding" if access != "walk" else "Another mode or a direct ride",
-            )
-        )
+        warnings.append({
+            "title": "The %s helps only a little" % cfg["label"].lower(),
+            "text": "It covers just %s of this %s trip, because the line does not run "
+                    "near one end. %s straight there may be quicker." % (
+                        format_distance(transit_m), format_distance(total_m),
+                        "Riding" if access != "walk" else "Another way, or a direct ride,"),
+            "action": TRY_BUS if cfg["vehicle"] != "bus" else None})
     if access_leg.get("offroad") or egress_leg.get("offroad"):
-        notes.append(
-            "Your %s is more than %s from any mapped road or path, so the %s there is "
-            "a straight-line estimate. Move the point onto a road for an exact route." % (
-                "start" if access_leg.get("offroad") else "destination",
-                format_distance(ACCESS_SNAP_RADIUS_M), "walk" if access == "walk" else "ride"))
+        warnings.append({
+            "title": "Your %s is away from any road" % (
+                "start" if access_leg.get("offroad") else "destination"),
+            "text": "It is more than %s from a mapped road or path, so the %s there is a "
+                    "guess. Move the point onto a road for the exact way." % (
+                        format_distance(ACCESS_SNAP_RADIUS_M),
+                        "walk" if access == "walk" else "ride")})
     elif access_leg.get("estimated") or egress_leg.get("estimated"):
         notes.append("Part of the %s is a rough estimate (the route service was busy) - "
                      "plan again in a minute for the exact way." % (
@@ -1240,6 +1269,7 @@ def plan(origin, destination, mode, report=None, access="walk"):
         "destination": {"lat": destination[0], "lon": destination[1]},
         "legs": legs,
         "notes": notes,
+        "warnings": warnings,
         "summary": {
             "distance_m": total_m,
             "duration_s": total_s,

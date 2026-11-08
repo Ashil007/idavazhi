@@ -120,9 +120,14 @@
       <div class="summary" id="summary"></div>
       <div class="leave" id="leave" hidden></div>
       <button type="button" class="ghost share" id="share">Share this trip</button>
+      <div class="warnings" id="warnings" hidden></div>
       <div class="trip" id="trip" hidden>
-        <label class="trip__when">Ring the alarm
-          <select id="trip-distance">
+        <div class="ring trip__when">
+          <div class="ring__label" id="ring-label">Ring the alarm</div>
+          <div class="ring__value" aria-live="polite"><b id="ring-num">Auto</b><span id="ring-unit"></span></div>
+          <div class="ring__sub" id="ring-sub">2 km, or 4 minutes, before your stop</div>
+          <div class="ring__chips" id="ring-chips" role="radiogroup" aria-labelledby="ring-label"></div>
+          <select id="trip-distance" hidden aria-hidden="true" tabindex="-1">
             <option value="auto">2 km or 4 min before (auto)</option>
             <option value="500">500 m before</option>
             <option value="1000">1 km before</option>
@@ -131,16 +136,23 @@
             <option value="5000">5 km before</option>
             <option value="10000">10 km before</option>
           </select>
+        </div>
+        <label class="switch trip__silent">
+          <span class="switch__icon" aria-hidden="true">&#128243;</span>
+          <span class="switch__text"><b>Vibrate only</b><span>No alarm sound</span></span>
+          <input type="checkbox" id="trip-silent" role="switch" />
+          <span class="switch__track" aria-hidden="true"></span>
         </label>
-        <label class="trip__silent"><input type="checkbox" id="trip-silent" /> Silent: vibrate only, no sound</label>
         <button type="button" class="trip__start" id="trip-start">Wake me before my stop</button>
-        <button type="button" class="ghost trip__sim" id="trip-sim">Try it: simulate the ride</button>
+        <button type="button" class="ghost trip__sim" id="trip-sim">See how the alarm works (demo)</button>
         <button type="button" class="ghost" id="trip-stop" hidden>Stop trip alerts</button>
         <p class="trip__status" id="trip-status" hidden></p>
-        <p class="trip__note">Keep this page open during the trip - the screen stays on while alerts run.</p>
+        <p class="trip__note">Keep Vazhi open during the trip. The screen stays on.</p>
       </div>
       <ol class="itinerary" id="itinerary"></ol>
-      <ul class="notes" id="notes"></ul>
+      <details class="more" id="more"><summary>More about this trip</summary>
+        <ul class="notes" id="notes"></ul>
+      </details>
     </section>
 
     <p class="offline" id="offline" hidden></p>
@@ -169,6 +181,7 @@
 <script src="stops.js"></script>
 <script src="install.js"></script>
 <script src="permit.js"></script>
+<script src="notice.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

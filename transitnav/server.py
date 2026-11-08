@@ -268,7 +268,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = plan(origin, destination, mode, report, access)
                 emit("result", result)
             except (PlanError, overpass.OverpassError) as exc:
-                emit("error", {"error": str(exc)})
+                emit("error", {"error": str(exc), "title": getattr(exc, "title", None),
+                               "actions": getattr(exc, "actions", [])})
             except ClientGone:
                 raise
             except Exception as exc:  # noqa: BLE001

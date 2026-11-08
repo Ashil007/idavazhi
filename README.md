@@ -135,8 +135,16 @@ planning.
 - Pick a **mode**, pick **Walk** or **Two-wheeler** for getting to and from the
   stops, and press **Plan journey**.
 - **Share this trip** copies a link that opens the same trip, already planned.
-- **Wake me before my stop** rings (or, in silent mode, only vibrates) before
-  the stop you get off at.
+- **Wake me before my stop** rings before the stop you get off at. Under it,
+  **Ring the alarm** shows the distance in large numbers with one button per
+  choice (Auto, 500 m to 10 km), and the **Vibrate only** switch turns the
+  sound off.
+- **Pop-ups in plain words** (`web/notice.js`): when a trip can't be planned,
+  a pop-up says why in a few words ("Nearest metro station is 44.1 km away")
+  with buttons that plan it another way (**Use a two-wheeler**, **Try a
+  bus**). Things to know about a planned trip (a long walk, a far station, an
+  old train timetable) pop up once and stay as yellow cards in the result;
+  everything else is under **More about this trip**. Text is large throughout.
 
 ### Install it as an app
 

@@ -160,6 +160,50 @@ var ALERTS = (function () {
     });
   }
 
+  /* The alarm distance, in large type: the choice in big numbers, and one
+   * button per distance under it (the <select> behind them keeps the value). */
+  var RING = {
+    auto: ["Auto", "", "2 km, or 4 minutes, before your stop", "Auto"],
+    500: ["500", "m", "before your stop", "500 m"],
+    1000: ["1", "km", "before your stop", "1 km"],
+    2000: ["2", "km", "before your stop", "2 km"],
+    3000: ["3", "km", "before your stop", "3 km"],
+    5000: ["5", "km", "before your stop", "5 km"],
+    10000: ["10", "km", "before your stop", "10 km"]
+  };
+
+  function buildRing() {
+    var box = el("trip-distance"), chips = el("ring-chips");
+    if (!box || !chips) return;
+    Array.prototype.forEach.call(box.options, function (o) {
+      var r = RING[o.value];
+      if (!r) return;
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "ring__chip";
+      b.setAttribute("role", "radio");
+      b.setAttribute("data-value", o.value);
+      b.textContent = r[3];
+      b.addEventListener("click", function () {
+        box.value = o.value;
+        box.dispatchEvent(new Event("change"));
+      });
+      chips.appendChild(b);
+    });
+    box.addEventListener("change", showRing);
+    showRing();
+  }
+
+  function showRing() {
+    var v = el("trip-distance").value, r = RING[v] || RING.auto;
+    el("ring-num").textContent = r[0];
+    el("ring-unit").textContent = r[1];
+    el("ring-sub").textContent = r[2];
+    Array.prototype.forEach.call(el("ring-chips").children, function (b) {
+      b.setAttribute("aria-checked", String(b.getAttribute("data-value") === v));
+    });
+  }
+
   function nextTarget() {
     for (var i = 0; i < targets.length; i++) {
       if (!fired[i + ":arrive"]) return i;
@@ -341,6 +385,7 @@ var ALERTS = (function () {
     el("trip-stop").addEventListener("click", function () { stop("Trip alerts are off."); });
     el("alarm-ok").addEventListener("click", silence);
     loadSetting();
+    buildRing();
     try {                                   // remember "Silent" on this device too
       el("trip-silent").checked = window.localStorage.getItem("vazhi.silent") === "1";
     } catch (e) { /* default: with sound */ }
