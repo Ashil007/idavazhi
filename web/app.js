@@ -133,6 +133,7 @@ function buildToggle(wrapId, options, key) {
     b.style.setProperty("--mode-color", options[id].color);
     b.innerHTML = ICONS[id] + "<span>" + options[id].label + "</span>";
     b.setAttribute("aria-pressed", String(id === state[key]));
+    b.setAttribute("data-id", id);
     b.addEventListener("click", function () {
       state[key] = id;
       Array.prototype.forEach.call(wrap.children, function (c, i) {
@@ -149,28 +150,38 @@ function buildModes() {
   buildToggle("access", ACCESS, "access");
 }
 
-/* --------------------------------------------------------------- random */
-
-function randomInView(role) {
-  var b = map.getBounds();
-  var pad = 0.12;                       // keep clear of the very edge
-  var lat = b.getSouth() + (b.getNorth() - b.getSouth()) * (pad + Math.random() * (1 - 2 * pad));
-  var lon = b.getWest() + (b.getEast() - b.getWest()) * (pad + Math.random() * (1 - 2 * pad));
-  setPoint(role, L.latLng(lat, lon));
-}
-
-document.querySelectorAll("[data-random]").forEach(function (btn) {
-  btn.addEventListener("click", function (ev) {
-    ev.stopPropagation();
-    randomInView(btn.getAttribute("data-random"));
-  });
-});
-
 document.querySelectorAll(".point").forEach(function (row) {
   row.addEventListener("click", function () { setActive(row.getAttribute("data-role")); });
 });
 
 /* --------------------------------------------------------------- search */
+
+// Saved (starred) and recent places, kept on this device for quick picks.
+var MYPLACES = (function () {
+  var KEY = "vazhi.places";
+  function load() {
+    try { return JSON.parse(window.localStorage.getItem(KEY)) || { saved: [], recent: [] }; }
+    catch (e) { return { saved: [], recent: [] }; }
+  }
+  function save(d) { try { window.localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* not kept */ } }
+  function same(a, b) { return a.name === b.name && Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4; }
+  function slim(p) { return { name: p.name, detail: p.detail || "", lat: p.lat, lon: p.lon }; }
+  return {
+    list: function () { return load(); },
+    used: function (p) {                       // remember a chosen place
+      var d = load();
+      d.recent = [slim(p)].concat(d.recent.filter(function (r) { return !same(r, p); })).slice(0, 6);
+      save(d);
+    },
+    isSaved: function (p) { return load().saved.some(function (s) { return same(s, p); }); },
+    toggle: function (p) {                     // star / unstar
+      var d = load();
+      if (d.saved.some(function (s) { return same(s, p); })) d.saved = d.saved.filter(function (s) { return !same(s, p); });
+      else d.saved = [slim(p)].concat(d.saved).slice(0, 10);
+      save(d);
+    }
+  };
+})();
 
 // Place search for the Start and Destination boxes: suggestions from every
 // named place in Kerala as you type (the server's local index), online search
@@ -187,28 +198,54 @@ function placeSearch(role, input, list) {
   }
   function close() { list.hidden = true; active = -1; }
   function choose(r) {
+    MYPLACES.used(r);
     setPoint(role, L.latLng(r.lat, r.lon), r.name);
     close();
     input.blur();
     SHEET.set("half");             // phones: back down, so the map shows the place
     map.setView([r.lat, r.lon], Math.max(map.getZoom(), 14));
   }
-  function show(results, empty) {
+  function row(r, i) {
+    var star = MYPLACES.isSaved(r);
+    return '<li role="option" data-i="' + i + '"><div class="s-row"><div><span class="s-name">' +
+           escapeHtml(r.name) + '</span><span class="s-detail">' + escapeHtml(r.detail || "") +
+           '</span></div><button type="button" class="s-star' + (star ? " is-on" : "") +
+           '" data-star="' + i + '" aria-label="' + (star ? "Remove from saved" : "Save this place") +
+           '">' + (star ? "\u2605" : "\u2606") + "</button></div></li>";
+  }
+  function show(results, empty, heads) {
     items = results;
     active = -1;
-    list.innerHTML = results.length ? results.map(function (r, i) {
-      return '<li role="option" data-i="' + i + '"><span class="s-name">' + escapeHtml(r.name) +
-             '</span><span class="s-detail">' + escapeHtml(r.detail || "") + "</span></li>";
-    }).join("") : '<li class="s-empty">' + escapeHtml(empty) + "</li>";
+    var html = "";
+    results.forEach(function (r, i) {
+      if (heads && heads[i]) html += '<li class="s-head">' + escapeHtml(heads[i]) + "</li>";
+      html += row(r, i);
+    });
+    list.innerHTML = html || '<li class="s-empty">' + escapeHtml(empty) + "</li>";
     list.hidden = false;
     Array.prototype.forEach.call(list.querySelectorAll("[data-i]"), function (li) {
       // mousedown, not click: it fires before the input loses focus.
-      li.addEventListener("mousedown", function (e) { e.preventDefault(); choose(items[+li.getAttribute("data-i")]); });
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        var star = e.target.closest("[data-star]");
+        if (star) { MYPLACES.toggle(items[+star.getAttribute("data-star")]); refresh(); return; }
+        choose(items[+li.getAttribute("data-i")]);
+      });
     });
   }
+  // With nothing typed yet: saved places, then recent ones.
+  function mine() {
+    var d = MYPLACES.list(), heads = {};
+    var recent = d.recent.filter(function (r) { return !MYPLACES.isSaved(r); });
+    if (d.saved.length) heads[0] = "Saved";
+    if (recent.length) heads[d.saved.length] = "Recent";
+    var all = d.saved.concat(recent);
+    if (all.length) show(all, "", heads); else close();
+  }
+  function refresh() { if (input.value.trim().length >= 2 && !/^(Point on the map|Your location)/.test(input.value)) ask(false); else mine(); }
   function ask(full) {
     var q = input.value.trim();
-    if (q.length < 2) { close(); return; }
+    if (q.length < 2) { mine(); return; }
     var ticket = ++asked;
     fetch("/api/search?q=" + encodeURIComponent(q) + near() + (full ? "&full=1" : ""))
       .then(function (r) { return r.json(); })
@@ -232,8 +269,8 @@ function placeSearch(role, input, list) {
       }, 320);
     }
     // A coordinate or "Your location" is not a search: select it to overtype.
-    if (/^(Point on the map|Your location)/.test(input.value)) input.select();
-    else if (input.value.trim().length >= 2) ask(false);
+    if (/^(Point on the map|Your location)/.test(input.value)) { input.select(); mine(); }
+    else refresh();
   });
   input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(function () { ask(false); }, 150); });
   input.addEventListener("blur", function () { setTimeout(close, 150); });
@@ -256,14 +293,83 @@ function placeSearch(role, input, list) {
 placeSearch("origin", el("origin-input"), el("origin-suggest"));
 placeSearch("destination", el("dest-input"), el("dest-suggest"));
 
+/* ---------------------------------------------------------------- share */
+// A trip link anyone can open (WhatsApp, SMS...): it fills in both ends, the
+// mode and how you reach the stops, and plans straight away.
+function tripLink() {
+  function end(p, box) {
+    var name = el(box).value;
+    if (/^(Point on the map|Your location)/.test(name)) name = "";
+    return p.lat.toFixed(5) + "," + p.lon.toFixed(5) + (name ? "," + name : "");
+  }
+  var q = new URLSearchParams({ from: end(state.origin, "origin-input"), to: end(state.destination, "dest-input"),
+                                mode: state.mode, access: state.access });
+  return window.location.origin + window.location.pathname + "?" + q.toString();
+}
+
+el("share").addEventListener("click", function () {
+  if (!state.origin || !state.destination || !state.mode) return;
+  var url = tripLink();
+  var text = "My trip on Vazhi: " + (el("dest-input").value || "destination");
+  var btn = el("share");
+  function said(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = "Share this trip"; }, 2500); }
+  if (navigator.share) {
+    navigator.share({ title: "Vazhi trip", text: text, url: url }).catch(function () { /* cancelled */ });
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(function () { said("Link copied - paste it in WhatsApp"); },
+                                            function () { window.prompt("Copy this link:", url); });
+  } else {
+    window.prompt("Copy this link:", url);
+  }
+});
+
+// Opened from a shared link: fill it in and plan.
+function openSharedTrip() {
+  var q = new URLSearchParams(window.location.search);
+  if (!q.get("from") || !q.get("to")) return false;
+  function point(v) {
+    var parts = v.split(","), lat = parseFloat(parts[0]), lon = parseFloat(parts[1]);
+    if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return { at: L.latLng(lat, lon), name: parts.slice(2).join(",") || null };
+  }
+  var a = point(q.get("from")), b = point(q.get("to"));
+  if (!a || !b) return false;
+  ["mode", "access"].forEach(function (key) {
+    var btn = document.querySelector("#" + (key === "mode" ? "modes" : "access") +
+                                      ' [data-id="' + (q.get(key) || "") + '"]');
+    if (btn) btn.click();
+  });
+  setPoint("origin", a.at, a.name);
+  setPoint("destination", b.at, b.name);
+  if (state.mode) planJourney();
+  return true;
+}
+
 /* ------------------------------------------------------------- progress */
 
 function resetStatus() {
   el("status-block").hidden = false;
   el("status").innerHTML = "";
+  el("status-now").textContent = "";
 }
 
-function pushStatus(message, kind) {
+// What a passenger sees while a plan is worked out: one plain line per stage.
+// The planner's own detailed messages stay under "Show the steps".
+var STAGE_TEXT = {
+  start: "Planning your journey\u2026",
+  stops: "Finding stops near you\u2026",
+  download: "Getting map data for this area (first time only)\u2026",
+  network: "Working out the route\u2026",
+  route: "Working out the route\u2026",
+  access: "Adding the walk to and from the stops\u2026"
+};
+
+function pushStatus(message, kind, stage) {
+  var now = el("status-now");
+  if (kind === "is-error") { now.textContent = message; now.className = "now is-error"; }
+  else if (kind === "") { now.textContent = message; now.className = "now is-done"; }
+  else if (stage === "download" && !/^Downloading/.test(message)) { /* from disk: nothing to say */ }
+  else { now.textContent = STAGE_TEXT[stage] || message; now.className = "now is-live"; }
   var list = el("status");
   var live = list.querySelector(".is-live");
   if (live) live.classList.remove("is-live");
@@ -276,7 +382,7 @@ function pushStatus(message, kind) {
   // The panel scrolls on its own, and on a short screen the progress list
   // sits below the Plan button: keep the newest line on screen, or a plan
   // that finishes (or fails) looks as if nothing happened.
-  li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  now.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 /* ---------------------------------------------------------------- plan */
@@ -315,7 +421,8 @@ function planJourney() {
   state.source = source;
 
   source.addEventListener("progress", function (ev) {
-    pushStatus(JSON.parse(ev.data).message);
+    var d = JSON.parse(ev.data);
+    pushStatus(d.message, undefined, d.stage);
   });
 
   source.addEventListener("result", function (ev) {
@@ -547,7 +654,8 @@ buildModes();
 SHEET.init();
 ALERTS.init();
 setActive("origin");
-locateUser();
+// A shared trip already says where from: don't ask for the location then.
+if (!openSharedTrip()) locateUser();
 
 /* ------------------------------------------------- offline data status */
 // The server downloads a region's stations and track at start. Show how far
@@ -557,21 +665,13 @@ function pollOffline() {
     var p = s.preload || {}, box = el("offline");
     if (!p.region || p.state === "idle") { setTimeout(pollOffline, 3000); return; }
     if (p.state === "running") {
-      box.textContent = "Saving " + p.region + " map data to disk (" + p.done + " of " +
-        p.total + " tiles" + (p.current ? ", " + p.current : "") +
-        "). Trips there get fast once this finishes.";
+      box.textContent = "Getting " + p.region + " ready for fast trips (" +
+        Math.round(100 * p.done / Math.max(1, p.total)) + "%) - you can plan meanwhile.";
       box.className = "offline";
       box.hidden = false;
       setTimeout(pollOffline, 3000);
-    } else if (p.state === "done") {
-      box.textContent = p.region + " stations and track are saved on disk - trips there plan in seconds.";
-      box.className = "offline is-ready";
-      box.hidden = false;
     } else {
-      box.textContent = "Some " + p.region + " map data could not be saved (OpenStreetMap's " +
-        "service is busy). It will download when a trip needs it.";
-      box.className = "offline";
-      box.hidden = false;
+      box.hidden = true;            // ready (or nothing to do): nothing to tell
     }
   }).catch(function () { /* the server may be restarting; no status then */ });
 }

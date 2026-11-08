@@ -111,7 +111,10 @@ var ALERTS = (function () {
     else { try { new Notification(title, opts); } catch (e) { /* not allowed here */ } }
   }
 
-  // The full-screen alarm: loud ones beep and buzz until "I'm awake".
+  function silent() { return !!(el("trip-silent") && el("trip-silent").checked); }
+
+  // The full-screen alarm: loud ones beep and buzz until "I'm awake"
+  // (only buzz, with "Silent" ticked - for a quiet bus or a sleeping baby).
   function alarm(title, body, loud) {
     el("alarm-title").textContent = title;
     el("alarm-body").textContent = body;
@@ -120,9 +123,9 @@ var ALERTS = (function () {
     notify(title, body);
     vibrate(loud ? [600, 250, 600, 250, 1200] : [300, 150, 300]);
     clearInterval(beepTimer);
-    beep();
+    if (!silent()) beep();
     if (loud) {
-      beepTimer = setInterval(function () { beep(); vibrate([600, 250, 600]); }, 1600);
+      beepTimer = setInterval(function () { if (!silent()) beep(); vibrate([600, 250, 600]); }, 1600);
     }
   }
 
@@ -338,6 +341,12 @@ var ALERTS = (function () {
     el("trip-stop").addEventListener("click", function () { stop("Trip alerts are off."); });
     el("alarm-ok").addEventListener("click", silence);
     loadSetting();
+    try {                                   // remember "Silent" on this device too
+      el("trip-silent").checked = window.localStorage.getItem("vazhi.silent") === "1";
+    } catch (e) { /* default: with sound */ }
+    el("trip-silent").addEventListener("change", function () {
+      try { window.localStorage.setItem("vazhi.silent", el("trip-silent").checked ? "1" : "0"); } catch (e) { /* not kept */ }
+    });
     // Phones drop the screen lock when the page is hidden; take it back.
     document.addEventListener("visibilitychange", function () {
       if (running && document.visibilityState === "visible") keepAwake();

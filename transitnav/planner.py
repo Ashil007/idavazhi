@@ -947,14 +947,9 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
             notes.append("No road was found near one end, so that part is a straight-line "
                          "estimate.")
         notes.append(
-            "Trains and times come from the open Indian Railways timetable published by "
-            "datameet, which dates from 2016. Trains have changed since, and many "
-            "long-distance trains run only on some days of the week, which the data "
-            "does not say. Check the train on IRCTC or NTES before you travel.")
-        notes.append(
-            "The total counts from when the first train leaves; it does not include "
-            "waiting at the station for it. Changes allow at least %d minutes."
-            % timetable.MIN_CHANGE_MIN)
+            "Train times are from a 2016 timetable and some trains run only on certain "
+            "days - check the train on IRCTC or NTES before you travel.")
+        notes.append("The total time starts when the first train leaves.")
 
         names = [r["train"]["number"] + " " + r["train"]["name"] for r in rides]
         option = names[0] if len(names) == 1 else "%s, change at %s" % (
@@ -1181,17 +1176,9 @@ def plan(origin, destination, mode, report=None, access="walk"):
     if walk_s < total_s:
         notes.append("Walking straight there (about %s) is quicker than this %s trip."
                      % (format_duration(walk_s), cfg["label"].lower()))
-    if skipped:
-        notes.append(
-            "A closer %s existed but had no connecting %s in OpenStreetMap, so "
-            "the next one was used." % (cfg["stop_noun"], "road" if mode == "bus" else "track")
-        )
     if changes:
-        notes.append(
-            "This trip changes lines at %s. Interchanges are inferred from where "
-            "lines meet in OpenStreetMap track data, so check the station layout "
-            "on arrival." % " and ".join(changes)
-        )
+        notes.append("You change lines at %s - follow the station signs to the other "
+                     "platform." % " and ".join(changes))
     longest_walk = max([l["distance_m"] for l in (access_leg, egress_leg)
                         if l["type"] == "walk"] or [0])
     if any(l.get("access") == "road" for l in (access_leg, egress_leg)):
@@ -1221,12 +1208,9 @@ def plan(origin, destination, mode, report=None, access="walk"):
                 "start" if access_leg.get("offroad") else "destination",
                 format_distance(ACCESS_SNAP_RADIUS_M), "walk" if access == "walk" else "ride"))
     elif access_leg.get("estimated") or egress_leg.get("estimated"):
-        notes.append(
-            "The street routing service did not answer, so the %s to or from the "
-            "%s is a straight-line estimate (allowing %d%% extra for detours). "
-            "Plan again in a minute for the exact route." % (
-                "walk" if access == "walk" else "ride", cfg["stop_noun"],
-                round((DETOUR_FACTOR - 1) * 100)))
+        notes.append("Part of the %s is a rough estimate (the route service was busy) - "
+                     "plan again in a minute for the exact way." % (
+                         "walk" if access == "walk" else "ride"))
     elif access_leg["approximate"] or egress_leg["approximate"]:
         notes.append(
             "One end of this trip has no mapped %s within %s, so that leg is "
@@ -1238,26 +1222,10 @@ def plan(origin, destination, mode, report=None, access="walk"):
     ic = cfg.get("intercity")
     long_bus = ic is not None and transit_m > ic["from_m"]
     if long_bus:
-        notes.append(
-            "This is the road route between the two stops, not a particular service: "
-            "check which buses run it (KSRTC, or private buses) and when. The stops "
-            "listed are bus stands and main stops, not every stop on the road.")
-    if road_s is not None:
-        factor = cfg["road_time_factor"]["intercity" if long_bus else "town"]
-        speeds = ("road speeds on the bus's actual route, plus %d%% for stops and "
-                  "boarding" % round((factor - 1) * 100))
-    elif ic is not None and transit_m > ic["town_m"]:
-        speeds = "about %.0f km/h in town and %.0f km/h between towns" % (
-            cfg["speed_kmh"], ic["speed_kmh"])
-    else:
-        speeds = "typical %s speed (%.0f km/h)" % (cfg["label"].lower(), cfg["speed_kmh"])
-    notes.append(
-        "Times are estimates - %s, %s at %.0f km/h, and %s of waiting for the "
-        "vehicle. They are not a timetable." % (
-            speeds, "walking" if access == "walk" else "two-wheeler", acfg["speed_kmh"],
-            format_duration(wait_s),
-        )
-    )
+        notes.append("Shown is the road the bus takes, not a timetable: check which "
+                     "KSRTC or private buses run it, and when, at the bus stand.")
+    notes.append("Times are estimates, including about %s of waiting for the %s."
+                 % (format_duration(wait_s), cfg["vehicle"]))
 
     result = {
         "mode": mode,

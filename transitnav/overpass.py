@@ -71,14 +71,6 @@ BUSY_RETRIES = 2          # extra tries per query for mirrors that answered "bus
 BUSY_BACKOFF_S = 5.0      # pause before a busy retry, growing with each one
 
 
-def _ordered_endpoints():
-    """Healthy mirrors only. A sidelined mirror is tried again only once every
-    mirror is sidelined - otherwise one dead mirror costs a full read timeout on
-    every query that falls through to it."""
-    healthy = [e for e in ENDPOINTS if _mirror_available(e)]
-    return healthy or list(ENDPOINTS)
-
-
 def _attempt_timeout(url: str, timeout: float, cap: float | None = None) -> float:
     with _mirror_lock:
         struck = _mirror_strikes.get(url, 0) > 0

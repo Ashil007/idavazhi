@@ -47,7 +47,6 @@
                  aria-autocomplete="list" aria-controls="origin-suggest" />
         </div>
         <button class="mini" id="locate" title="Use your current location as the start">Locate</button>
-        <button class="mini" data-random="origin" title="Pick a random point in view">Random</button>
       </div>
       <ul class="suggest" id="origin-suggest" role="listbox" hidden></ul>
       <div class="point" id="point-destination" data-role="destination">
@@ -58,7 +57,6 @@
                  placeholder="Where to? Search a place" aria-label="Destination"
                  aria-autocomplete="list" aria-controls="dest-suggest" />
         </div>
-        <button class="mini" data-random="destination" title="Pick a random point in view">Random</button>
       </div>
       <ul class="suggest" id="dest-suggest" role="listbox" hidden></ul>
       <p class="hint" id="hint">Clicking the map sets the highlighted point.</p>
@@ -70,13 +68,16 @@
     <button class="ghost" id="clear">Clear</button>
 
     <section class="block" id="status-block" hidden>
-      <h2 class="block__title">Progress</h2>
-      <ul class="status" id="status"></ul>
+      <p class="now" id="status-now"></p>
+      <details class="steps"><summary>Show the steps</summary>
+        <ul class="status" id="status"></ul>
+      </details>
     </section>
 
     <section class="block" id="result-block" hidden>
       <div class="options" id="options" hidden></div>
       <div class="summary" id="summary"></div>
+      <button type="button" class="ghost share" id="share">Share this trip</button>
       <div class="trip" id="trip" hidden>
         <label class="trip__when">Ring the alarm
           <select id="trip-distance">
@@ -89,6 +90,7 @@
             <option value="10000">10 km before</option>
           </select>
         </label>
+        <label class="trip__silent"><input type="checkbox" id="trip-silent" /> Silent: vibrate only, no sound</label>
         <button type="button" class="trip__start" id="trip-start">Wake me before my stop</button>
         <button type="button" class="ghost trip__sim" id="trip-sim">Try it: simulate the ride</button>
         <button type="button" class="ghost" id="trip-stop" hidden>Stop trip alerts</button>
@@ -103,7 +105,7 @@
 
     <footer class="panel__foot">
       Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
-      contributors. Routing computed locally from OSM geometry &mdash; not a timetable.
+      contributors. Times are estimates, not a timetable.
     </footer>
   </aside>
 
