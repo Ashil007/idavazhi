@@ -129,6 +129,19 @@ planning.
 - **Wake me before my stop** rings (or, in silent mode, only vibrates) before
   the stop you get off at.
 
+### Install it as an app
+
+Vazhi is an installable web app (PWA). On Android, Chrome shows **Install Vazhi
+on this phone** at the top of the panel; on an iPhone, the button explains
+Safari's **Share > Add to Home Screen**. Installed, it has its own icon, opens
+full screen without the browser bar, and opens even with no internet (planning
+still needs it; a trip alarm that is already on keeps working offline).
+Installing needs https: on a phone, use the link from `tools/phone_link.py`.
+
+The app's own files are cached by `web/sw.js` but always fetched fresh when
+online, so an update shows on the next open. Trip plans, search, bus times and
+map tiles are never cached. The icons are drawn by `tools/make_icons.py`.
+
 ### Bus times from riders
 
 No open timetable exists for KSRTC and private buses, so riders add the times
@@ -242,6 +255,7 @@ tools/
   build_map.py      builds the Kerala map tiles with tilemaker (Docker)
   routing_server.py starts/stops your own Valhalla routing server (Docker)
   phone_link.py     temporary https link so the app (and trip alarm) works on a phone
+  make_icons.py     draws the app icons into web/icons (Pillow)
 web/                Leaflet front end (times.js: bus times, stops.js: stop names)
 data/               riders' data (timings.db, stops.db) - live data, not in git
 ```

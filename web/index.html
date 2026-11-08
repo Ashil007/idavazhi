@@ -4,6 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Vazhi</title>
+<meta name="description" content="Door-to-door trips by bus, train and metro in Kerala, with an alarm before your stop." />
+<meta name="theme-color" content="#11151c" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Vazhi" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 <link rel="stylesheet" href="style.css" />
@@ -26,6 +35,14 @@
       <h1>Vazhi <span class="brand-ml" lang="ml">വഴി</span></h1>
       <p class="sub">Bus, train and metro across Kerala &mdash; door to door</p>
     </header>
+
+    <div class="install" id="install" hidden>
+      <button type="button" class="install__btn" id="install-btn">Install Vazhi on this phone</button>
+      <button type="button" class="install__close" id="install-close" aria-label="Not now">&times;</button>
+      <p class="install__how" id="install-how" hidden></p>
+    </div>
+    <p class="offline-note" id="offline-note" hidden>You are offline. Planning a trip needs the
+      internet - a trip alarm that is already on keeps working.</p>
 
     <section class="block">
       <h2 class="block__title">Mode of transport</h2>
@@ -127,6 +144,7 @@
 <script src="alerts.js"></script>
 <script src="times.js"></script>
 <script src="stops.js"></script>
+<script src="install.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

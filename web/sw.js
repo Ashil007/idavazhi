@@ -1,10 +1,69 @@
-/* Vazhi service worker - only for trip-alert notifications.
- * Android shows web notifications only through a service worker; tapping
- * one brings the open trip page back to the front. Nothing is cached. */
+/* Vazhi service worker.
+ *
+ * - Makes Vazhi installable, and lets it open without internet: the app's own
+ *   files (and the map libraries) are kept in a cache. They are always fetched
+ *   fresh when online, so an update shows up on the next open; the cache is
+ *   only the fallback.
+ * - Trip plans, place search, bus times and map tiles always go to the
+ *   server, never the cache: stale answers there would mislead.
+ * - Trip-alert notifications: Android shows web notifications only through a
+ *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-self.addEventListener("install", function () { self.skipWaiting(); });
-self.addEventListener("activate", function (event) { event.waitUntil(self.clients.claim()); });
+var CACHE = "vazhi-shell-v1";
+var SHELL = [
+  "/", "index.html", "style.css", "manifest.webmanifest",
+  "basemap.js", "sheet.js", "alerts.js", "times.js", "stops.js", "install.js", "app.js",
+  "icons/icon-192.png", "icons/icon-512.png", "icons/favicon-32.png",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+  "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css",
+  "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js",
+  "https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"
+];
+
+self.addEventListener("install", function (event) {
+  // One file failing (a library site down) must not stop the install.
+  event.waitUntil(caches.open(CACHE).then(function (cache) {
+    return Promise.all(SHELL.map(function (url) {
+      return cache.add(url).catch(function () { /* cached on first use instead */ });
+    }));
+  }).then(function () { return self.skipWaiting(); }));
+});
+
+self.addEventListener("activate", function (event) {
+  event.waitUntil(caches.keys().then(function (keys) {
+    return Promise.all(keys.filter(function (k) { return k !== CACHE; })
+                           .map(function (k) { return caches.delete(k); }));
+  }).then(function () { return self.clients.claim(); }));
+});
+
+function isShell(url) {
+  if (url.origin === self.location.origin) {
+    return !/^\/(api|tiles)\//.test(url.pathname);
+  }
+  return url.hostname === "unpkg.com";
+}
+
+self.addEventListener("fetch", function (event) {
+  var req = event.request;
+  if (req.method !== "GET") return;
+  var url = new URL(req.url);
+  if (!isShell(url)) return;              // plans, search, tiles: straight to the network
+  event.respondWith(fetch(req).then(function (res) {
+    if (res.ok) {
+      var copy = res.clone();
+      caches.open(CACHE).then(function (cache) {
+        // A shared-trip link (/?from=...) is the same page as "/".
+        cache.put(req.mode === "navigate" ? "/" : req, copy);
+      });
+    }
+    return res;
+  }).catch(function () {
+    return caches.match(req.mode === "navigate" ? "/" : req, { ignoreSearch: req.mode === "navigate" })
+      .then(function (hit) { return hit || Response.error(); });
+  }));
+});
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();

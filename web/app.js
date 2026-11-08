@@ -665,6 +665,7 @@ function escapeHtml(text) {
 
 buildModes();
 SHEET.init();
+INSTALL.init();
 ALERTS.init();
 STOPS.init();
 setActive("origin");

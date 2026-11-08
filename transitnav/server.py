@@ -22,6 +22,9 @@ from .planner import PlanError, plan, prefetch
 
 NL = chr(10)
 
+# Not in every system's MIME table; browsers want this type for the app manifest.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+
 
 class ClientGone(Exception):
     """The browser closed the stream before the plan finished."""

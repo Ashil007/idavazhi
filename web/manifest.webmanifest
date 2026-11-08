@@ -1,0 +1,20 @@
+{
+  "name": "Vazhi - bus, train and metro across Kerala",
+  "short_name": "Vazhi",
+  "description": "Door-to-door trips by bus, train and metro in Kerala, with an alarm before your stop.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#11151c",
+  "theme_color": "#11151c",
+  "lang": "en-IN",
+  "categories": ["travel", "navigation"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
