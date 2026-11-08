@@ -36,6 +36,14 @@
     <p class="permit__foot">You can change this later in your phone's settings.</p>
   </div>
 </div>
+<aside class="drawer is-away" id="drawer" hidden aria-label="Your trip">
+  <div class="drawer__bar">
+    <b>Your trip</b>
+    <button type="button" class="drawer__hide" id="drawer-hide" aria-label="Slide the trip away to see the map">Map &rsaquo;</button>
+  </div>
+  <div class="drawer__body" id="drawer-body"></div>
+</aside>
+<button type="button" class="drawer-tab" id="drawer-tab" hidden aria-label="Show your trip">Trip &rsaquo;</button>
 <div class="ask" id="ask" hidden role="dialog" aria-live="polite" aria-label="A question about a bus stop"></div>
 <div class="alarm" id="alarm" hidden role="alertdialog" aria-labelledby="alarm-title">
   <div class="alarm__box">
@@ -176,6 +184,7 @@
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <script src="basemap.js"></script>
 <script src="sheet.js"></script>
+<script src="drawer.js"></script>
 <script src="alerts.js"></script>
 <script src="times.js"></script>
 <script src="stops.js"></script>

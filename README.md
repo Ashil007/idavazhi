@@ -135,6 +135,10 @@ planning.
 - Pick a **mode**, pick **Walk** or **Two-wheeler** for getting to and from the
   stops, and press **Plan journey**.
 - **Share this trip** copies a link that opens the same trip, already planned.
+- **On a phone**, planning (where from, where to, Bus/Train/Metro) is in a
+  sheet at the bottom; the planned trip slides in from the left
+  (`web/drawer.js`). **Map ›** or a swipe left slides it away to show the
+  route, and the **Trip ›** tab on the left edge brings it back.
 - **Wake me before my stop** rings before the stop you get off at. Under it,
   **Ring the alarm** shows the distance in large numbers with one button per
   choice (Auto, 500 m to 10 km), and the **Vibrate only** switch turns the

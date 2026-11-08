@@ -887,3 +887,47 @@ html, body {
 /* Labels in plain words, not small capitals: easier to read at a glance. */
 .point__label, .block__title, .suggest .s-head { text-transform: none; letter-spacing: 0; font-size: 14px; }
 .block__title { font-size: 16px; color: var(--ink-dim); }
+
+/* ------------------------------------------------------------------
+   Phones: the planned trip in a drawer from the left (drawer.js). */
+.drawer, .drawer-tab { display: none; }
+@media (max-width: 860px) {
+  .drawer {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 1200;
+    width: min(88vw, 420px); display: flex; flex-direction: column;
+    background: var(--panel); border-right: 1px solid var(--line);
+    box-shadow: 12px 0 40px rgba(0,0,0,.45);
+    transform: translateX(0); transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    padding-top: env(safe-area-inset-top);
+  }
+  .drawer[hidden] { display: none; }
+  .drawer.is-away { transform: translateX(-104%); box-shadow: none; }
+  .drawer__bar {
+    display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .drawer__bar b { flex: 1; font-size: 21px; }
+  .drawer__hide {
+    min-height: 44px; padding: 8px 16px; border-radius: 22px; cursor: pointer;
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    font: inherit; font-size: 17px; font-weight: 650;
+  }
+  .drawer__body {
+    flex: 1; overflow-y: auto; overscroll-behavior: contain;
+    padding: 14px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  .drawer__body #result-block { margin-top: 0; }
+  /* "Trip": on the left edge while the drawer is slid away. */
+  .drawer-tab {
+    position: fixed; left: 0; top: 42%; z-index: 1100; display: block;
+    padding: 16px 14px 16px 12px; border-radius: 0 16px 16px 0; cursor: pointer;
+    background: #f5b642; color: #1b1405; border: 0;
+    font: inherit; font-size: 18px; font-weight: 800;
+    box-shadow: 4px 4px 18px rgba(0,0,0,.4);
+  }
+  .drawer-tab[hidden] { display: none; }
+  /* With the drawer open, the bottom sheet steps aside. */
+  .drawer-open .panel { visibility: hidden; }
+  .drawer-open .leaflet-control-zoom { visibility: hidden; }
+}
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) { .drawer { transition: none; } }

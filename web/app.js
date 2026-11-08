@@ -409,6 +409,7 @@ function planJourney() {
 
   state.planning = true;
   document.querySelector(".panel").classList.remove("has-result");
+  DRAWER.close();                // phones: the old trip's drawer goes while planning
   SHEET.set("half");             // phones: show the progress, keep some map
   el("plan").disabled = true;
   el("plan").textContent = "Planning...";
@@ -436,15 +437,15 @@ function planJourney() {
     if (settled) return;
     finish();
     pushStatus("Done.", "");
+    // Phones: the sheet drops to its lowest (the map is fitted above it) and
+    // the trip slides in from the left (drawer.js).
+    if (SHEET.isPhone()) SHEET.set("peek");
     showOptions(JSON.parse(ev.data));
-    SHEET.set("half");
-    warnAbout(state.options[0]);
-    // Phones: the trip moves to the top of the sheet (style.css, .has-result),
-    // so its time and alarm show in the part of the sheet above the map.
     var panel = document.querySelector(".panel");
     panel.classList.add("has-result");
-    if (SHEET.isPhone()) panel.scrollTop = 0;
+    if (SHEET.isPhone()) { panel.scrollTop = 0; DRAWER.open(); }
     else el("result-block").scrollIntoView({ block: "start", behavior: "smooth" });
+    warnAbout(state.options[0]);
   });
 
   // Fires both for an error the planner sent us and for a dropped connection;
@@ -519,6 +520,7 @@ el("trip-head-edit").addEventListener("click", function () {
   var panel = document.querySelector(".panel");
   panel.classList.remove("has-result");
   panel.scrollTop = 0;
+  DRAWER.away();
   SHEET.set("half");
 });
 
@@ -540,6 +542,7 @@ el("clear").addEventListener("click", function () {
   el("status-block").hidden = true;
   el("legend").hidden = true;
   document.querySelector(".panel").classList.remove("has-result");
+  DRAWER.close();
   setActive("origin");
 });
 
@@ -740,6 +743,7 @@ function escapeHtml(text) {
 
 buildModes();
 SHEET.init();
+DRAWER.init();
 INSTALL.init();
 ALERTS.init();
 STOPS.init();
