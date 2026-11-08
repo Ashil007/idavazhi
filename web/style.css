@@ -665,3 +665,64 @@ html, body {
 /* Interchange: a station where the route changes line. */
 .stopdot--change { border-width: 3px; box-shadow: 0 0 0 3px rgba(0,0,0,.35), 0 1px 5px rgba(0,0,0,.5); }
 .leg__stops li.is-change { color: var(--ink); font-weight: 600; }
+
+/* ------------------------------------------------------------------
+   Phones: what matters most sits in the top of the sheet, which is all
+   most riders see while they keep the map in view. Before a trip: the
+   search boxes, the mode and Plan. With a trip: its time, leave-by, the
+   stop alarm and the route options. Everything else follows below. */
+.trip-head { display: none; }
+@media (max-width: 860px) {
+  .panel { display: flex; flex-direction: column;
+           padding-bottom: calc(28px + env(safe-area-inset-bottom) + var(--sheet-hidden, 0px)); }
+  .panel > * { flex: 0 0 auto; }
+  .sheet-handle { order: 0; }
+  .offline-note { order: 1; margin-top: 2px; }
+  #points-block { order: 3; margin-top: 2px; }
+  #modes-block { order: 4; margin-top: 12px; }
+  #plan { order: 5; }
+  #status-block { order: 6; }
+  #result-block { order: 7; }
+  #access-block { order: 8; }
+  #clear { order: 9; }
+  .install { order: 10; margin-top: 18px; }
+  .panel__head { order: 11; margin-top: 22px; }
+  .offline { order: 12; }
+  .addstop-btn { order: 13; }
+  .panel__foot { order: 14; }
+  /* The boxes and buttons explain themselves; their titles cost a line each. */
+  #points-block .block__title, #modes-block .block__title { display: none; }
+  #points-block .hint { display: none; }
+  /* Compact: icon beside the label, so the mode row and Plan fit too. */
+  .mode { flex-direction: row; justify-content: center; gap: 7px; padding: 11px 6px; font-size: 14px; }
+  .point { min-height: 52px; margin-bottom: 6px; }
+  .where { font-size: 11.5px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2;
+           -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* A planned trip comes first; the form moves below it. */
+  .panel.has-result #result-block { order: 2; margin-top: 2px; }
+  .panel.has-result #status-block { display: none; }
+  #result-block { display: flex; flex-direction: column; }
+  #result-block[hidden] { display: none; }
+  #result-block > * { order: 10; }
+  .trip-head { display: flex; align-items: center; gap: 10px; order: 1 !important;
+               margin: 0 0 10px; font-size: 13px; color: var(--ink-dim); }
+  .trip-head__where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trip-head__where b { color: var(--ink); font-weight: 600; }
+  #summary { order: 2; }
+  #leave { order: 3; }
+  #trip { order: 4; }
+  #trip[hidden] { display: none; }
+  #options { order: 5; margin-top: 4px; }
+  #options[hidden] { display: none; }
+  #share { order: 6; }
+  #itinerary { order: 7; }
+  #notes { order: 8; }
+  /* In the alarm box: the button first, its settings after it. */
+  #trip-start, #trip-stop { order: 1; }
+  #trip-status { order: 2; }
+  .trip__when { order: 3; }
+  .trip__silent { order: 4; }
+  #trip-sim { order: 5; }
+  .trip__note { order: 6; }
+}

@@ -1,29 +1,41 @@
 /* Phone layout: the control panel becomes a bottom sheet over a full-screen
  * map, like a phone map app. Three resting heights - peek (just the top),
- * half and full - chosen by dragging the handle or tapping it. On a wide
- * screen the panel stays a side panel and none of this applies.
+ * "half" (about 40% of the screen, so most of the map stays in view) and
+ * full - chosen by dragging the handle or tapping it. On a wide screen the
+ * panel stays a side panel and none of this applies.
+ *
+ * The sheet is always full height and slid down; the part below the screen
+ * edge is given back as padding at the bottom (--sheet-hidden), so whatever
+ * the height, everything in it can be scrolled into view.
  */
 "use strict";
 
 var SHEET = (function () {
   var phone = window.matchMedia("(max-width: 860px)");
-  var PEEK_PX = 176;            // the handle, title and transport buttons
+  var PEEK_PX = 168;            // the handle and the two search boxes
+  var HALF = 0.4;               // share of the screen at the middle height
   var panel = null, state = "half";
 
   function shown(s) {
     var full = panel.offsetHeight;
     if (s === "peek") return Math.min(PEEK_PX, full);
-    if (s === "half") return Math.min(Math.round(window.innerHeight * 0.52), full);
+    if (s === "half") return Math.min(Math.round(window.innerHeight * HALF), full);
     return full;
   }
 
   function place(offset) {
-    panel.style.transform = "translateY(" + Math.max(0, offset) + "px)";
+    offset = Math.max(0, offset);
+    panel.style.transform = "translateY(" + offset + "px)";
+    panel.style.setProperty("--sheet-hidden", offset + "px");
   }
 
   function apply() {
     if (!panel) return;
-    if (!phone.matches) { panel.style.transform = ""; return; }
+    if (!phone.matches) {
+      panel.style.transform = "";
+      panel.style.removeProperty("--sheet-hidden");
+      return;
+    }
     place(panel.offsetHeight - shown(state));
   }
 

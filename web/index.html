@@ -44,17 +44,17 @@
     <p class="offline-note" id="offline-note" hidden>You are offline. Planning a trip needs the
       internet - a trip alarm that is already on keeps working.</p>
 
-    <section class="block">
+    <section class="block" id="modes-block">
       <h2 class="block__title">Mode of transport</h2>
       <div class="modes" id="modes"></div>
     </section>
 
-    <section class="block">
+    <section class="block" id="access-block">
       <h2 class="block__title">To and from the stop</h2>
       <div class="modes modes--two" id="access"></div>
     </section>
 
-    <section class="block">
+    <section class="block" id="points-block">
       <h2 class="block__title">Points</h2>
       <div class="point" id="point-origin" data-role="origin">
         <span class="point__dot point__dot--origin"></span>
@@ -93,6 +93,11 @@
     </section>
 
     <section class="block" id="result-block" hidden>
+      <div class="trip-head" id="trip-head">
+        <div class="trip-head__where"><b id="trip-head-from"></b> &rarr; <b id="trip-head-to"></b>
+          <span id="trip-head-mode"></span></div>
+        <button type="button" class="mini" id="trip-head-edit">Change</button>
+      </div>
       <div class="options" id="options" hidden></div>
       <div class="summary" id="summary"></div>
       <div class="leave" id="leave" hidden></div>

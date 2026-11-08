@@ -405,6 +405,7 @@ function planJourney() {
   }
 
   state.planning = true;
+  document.querySelector(".panel").classList.remove("has-result");
   SHEET.set("half");             // phones: show the progress, keep some map
   el("plan").disabled = true;
   el("plan").textContent = "Planning...";
@@ -434,7 +435,12 @@ function planJourney() {
     pushStatus("Done.", "");
     showOptions(JSON.parse(ev.data));
     SHEET.set("half");
-    el("result-block").scrollIntoView({ block: "start", behavior: "smooth" });
+    // Phones: the trip moves to the top of the sheet (style.css, .has-result),
+    // so its time and alarm show in the part of the sheet above the map.
+    var panel = document.querySelector(".panel");
+    panel.classList.add("has-result");
+    if (SHEET.isPhone()) panel.scrollTop = 0;
+    else el("result-block").scrollIntoView({ block: "start", behavior: "smooth" });
   });
 
   // Fires both for an error the planner sent us and for a dropped connection;
@@ -460,6 +466,15 @@ function planJourney() {
 
 el("plan").addEventListener("click", planJourney);
 
+// Phones: back to the search boxes and modes at the top of the sheet; the
+// trip stays below them until it is planned again.
+el("trip-head-edit").addEventListener("click", function () {
+  var panel = document.querySelector(".panel");
+  panel.classList.remove("has-result");
+  panel.scrollTop = 0;
+  SHEET.set("half");
+});
+
 el("clear").addEventListener("click", function () {
   if (state.source) state.source.close();
   state.planning = false;
@@ -477,6 +492,7 @@ el("clear").addEventListener("click", function () {
   el("result-block").hidden = true;
   el("status-block").hidden = true;
   el("legend").hidden = true;
+  document.querySelector(".panel").classList.remove("has-result");
   setActive("origin");
 });
 
@@ -584,6 +600,11 @@ function renderPlan(plan, fit) {
   }
   renderOptions(plan);
   ALERTS.attach(plan);
+
+  /* ---- the trip in one line (phones: above the time, with "Change") ---- */
+  el("trip-head-from").textContent = el("origin-input").value || "Start";
+  el("trip-head-to").textContent = el("dest-input").value || "Destination";
+  el("trip-head-mode").textContent = "by " + plan.mode_label.toLowerCase();
 
   /* ---- summary ---- */
   var s = plan.summary;
