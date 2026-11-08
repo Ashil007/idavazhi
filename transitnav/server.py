@@ -16,7 +16,7 @@ import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import basemap, locate, overpass, places, preload
+from . import basemap, locate, overpass, places, preload, timings
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -191,6 +191,11 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/api/status":
                 with preload._lock:
                     self._json(200, {"preload": dict(preload.status)})
+            elif route == "/api/timings":
+                board = _coord(params, "blat", "blon")
+                alight = _coord(params, "alat", "alon")
+                device = (params.get("device") or [""])[0]
+                self._json(200, {"times": timings.near(board, alight, device)})
             elif route == "/api/prefetch":
                 point = _coord(params, "lat", "lon")
                 mode = (params.get("mode") or ["bus"])[0]
@@ -258,9 +263,43 @@ class Handler(BaseHTTPRequestHandler):
         except ClientGone:
             print("  client left before the plan finished")
 
+    def _client(self):
+        """Who is asking, for rate limits only (never stored). Through the
+        phone-link tunnel every request arrives from this machine, and the
+        tunnel names the real client in CF-Connecting-IP."""
+        addr = self.client_address[0]
+        if addr in ("127.0.0.1", "::1") and self.headers.get("CF-Connecting-IP"):
+            return self.headers["CF-Connecting-IP"]
+        return addr
+
+    def _timings_post(self, route):
+        """Riders add a bus time, or confirm or flag one (see timings.py)."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > 4096:
+                raise timings.TimingError("That request is too large.")
+            body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            if not isinstance(body, dict):
+                raise timings.TimingError("Malformed request.")
+            if route == "/api/timings":
+                self._json(200, {"ok": True, "id": timings.add(body, self._client())})
+            else:
+                timings.vote(body, self._client())
+                self._json(200, {"ok": True})
+        except timings.TimingError as exc:
+            self._json(400, {"error": str(exc)})
+        except (ValueError, UnicodeDecodeError):
+            self._json(400, {"error": "Malformed request."})
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            self._json(500, {"error": "%s: %s" % (type(exc).__name__, exc)})
+
     def do_POST(self):
-        """Non-streaming equivalent of /api/plan, handy for scripts and curl."""
+        """Riders' bus times, and a non-streaming /api/plan for scripts and curl."""
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path in ("/api/timings", "/api/timings/vote"):
+            self._timings_post(parsed.path)
+            return
         if parsed.path != "/api/plan":
             self._send(404, b"Not found", "text/plain; charset=utf-8")
             return

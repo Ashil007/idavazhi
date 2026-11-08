@@ -435,6 +435,40 @@ html, body {
 
 .leg__stops summary { cursor: pointer; color: var(--ink-faint); }
 
+/* Bus times added by riders, under a bus ride. */
+.times { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+         background: var(--panel-2); font-size: 12.5px; }
+.times__head { font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.times__head span { font-weight: 400; font-size: 11px; color: var(--ink-faint); margin-left: 4px; }
+.times__none { margin: 0 0 6px; color: var(--ink-dim); }
+.times__list { list-style: none; margin: 0; padding: 0; }
+.times__row { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 7px 0;
+              border-top: 1px solid var(--line); }
+.times__row:first-child { border-top: 0; }
+.times__when { display: flex; flex-direction: column; min-width: 64px; }
+.times__when b { font-size: 15px; color: var(--ink); }
+.times__soon { font-size: 11px; color: var(--bus); }
+.times__what { color: var(--ink-dim); line-height: 1.4; }
+.times__trust { display: block; font-size: 11px; color: var(--ink-faint); }
+.times__vote { grid-column: 2; display: flex; gap: 6px; }
+.times__vote button { font: inherit; font-size: 11.5px; padding: 3px 10px; border-radius: 999px;
+                      border: 1px solid var(--line); background: transparent; color: var(--ink-dim);
+                      cursor: pointer; }
+.times__vote button.is-on { border-color: var(--bus); color: var(--bus); }
+.times__vote button.is-on.is-bad { border-color: var(--danger); color: var(--danger); }
+.times__all, .times__add { margin-top: 8px; }
+.times__all summary, .times__add summary { cursor: pointer; color: var(--accent); padding: 2px 0; }
+.times__form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.times__form label { display: flex; flex-direction: column; gap: 3px; color: var(--ink-dim); font-size: 11.5px; }
+.times__form label:first-child, .times__wide, .times__hint, .times__send, .times__msg { grid-column: 1 / -1; }
+.times__form input, .times__form select { font: inherit; font-size: 14px; padding: 7px 8px; border-radius: 6px;
+                      border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.times__hint { margin: 0; font-size: 11px; color: var(--ink-faint); }
+.times__send { font: inherit; font-weight: 600; padding: 9px; border: 0; border-radius: 8px;
+               background: var(--bus); color: #fff; cursor: pointer; }
+.times__send:disabled { opacity: .6; cursor: default; }
+.times__msg { margin: 0; min-height: 1em; font-size: 12px; color: var(--ink-dim); }
+
 .notes { list-style: none; margin: 14px 0 0; padding: 0; }
 
 .notes li {

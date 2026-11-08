@@ -1222,8 +1222,8 @@ def plan(origin, destination, mode, report=None, access="walk"):
     ic = cfg.get("intercity")
     long_bus = ic is not None and transit_m > ic["from_m"]
     if long_bus:
-        notes.append("Shown is the road the bus takes, not a timetable: check which "
-                     "KSRTC or private buses run it, and when, at the bus stand.")
+        notes.append("Shown is the road the bus takes. Bus times under the ride are added "
+                     "by riders - if none are listed, ask at the bus stand, then add them.")
     notes.append("Times are estimates, including about %s of waiting for the %s."
                  % (format_duration(wait_s), cfg["vehicle"]))
 

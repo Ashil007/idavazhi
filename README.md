@@ -118,13 +118,32 @@ Nominatim for the district boundary. Nothing else about you is sent. No
 transport mode is selected at first, so pick Bus, Train or Metro before
 planning.
 
-- **Click the map** to place the highlighted point; the panel shows which one is
-  active. Click a point row to re-target it, or drag a marker to move it.
-- **Random** drops a point at a random spot inside the current view.
-- **Find a place** searches by name (Nominatim) and moves the active point.
+- **Type in Where from / Where to** for suggestions from every named place in
+  Kerala (online search as a backup), or **click the map** to place the
+  highlighted point. Drag a marker to move it.
+- **☆ saves a place**: with the box empty, your saved and recent places are
+  listed first.
 - Pick a **mode**, pick **Walk** or **Two-wheeler** for getting to and from the
-  stops, and press **Plan journey**. Progress streams live while the
-  map data downloads.
+  stops, and press **Plan journey**.
+- **Share this trip** copies a link that opens the same trip, already planned.
+- **Wake me before my stop** rings (or, in silent mode, only vibrates) before
+  the stop you get off at.
+
+### Bus times from riders
+
+No open timetable exists for KSRTC and private buses, so riders add the times
+they know. Under every bus ride is the list of times riders have added at that
+stop for buses going the same way, with the next ones first ("2:28 pm, in 15
+min"). Anyone can add a time (when it leaves, KSRTC or private, which days, the
+board on the bus) and confirm (**Seen it**) or flag (**Wrong**) other riders'
+times. A time is hidden once more riders flag it than confirm it, by two.
+
+Times are matched by boarding stop (within 400 m) and direction, so a time one
+rider adds shows for everyone boarding there going that way. They are stored in
+`data/timings.db`, which is not in git and is never cleared with the cache.
+No IP addresses are kept: a browser is known only by a hash of a random id it
+made itself, which allows one vote per time. Adding is limited to 20 times an
+hour per connection.
 
 ## How it works
 
@@ -181,17 +200,20 @@ transitnav/
   preload.py        downloads a region's stations and track to disk at start
   locate.py         your district from your internet connection (location fallback)
   basemap.py        serves the own Kerala map tiles (.mbtiles)
-tools/
-  build_map.py      builds the Kerala map tiles with tilemaker (Docker)
-  routing_server.py starts/stops your own Valhalla routing server (Docker)
-  phone_link.py     temporary https link so the app (and trip alarm) works on a phone
+  places.py         search index of every named place in the Kerala map
+  timings.py        bus times added, confirmed and flagged by riders
   timetable.py      Indian Railways timetable: download, index, train search
   router.py         street routing (Valhalla, OSRM) for walk, ride and bus legs
   geo.py            distances, bounding boxes, corridors, polyline maths
   graph.py          graph, spatial index, union-find, A*
   planner.py        the three-leg journey planner
   server.py         stdlib HTTP server, JSON API, SSE progress
-web/                Leaflet front end
+tools/
+  build_map.py      builds the Kerala map tiles with tilemaker (Docker)
+  routing_server.py starts/stops your own Valhalla routing server (Docker)
+  phone_link.py     temporary https link so the app (and trip alarm) works on a phone
+web/                Leaflet front end (times.js: riders' bus times)
+data/               riders' bus times (timings.db) - live data, not in git
 ```
 
 ## API
@@ -210,5 +232,11 @@ Server-Sent Events stream (`progress`, then `result` or `error`).
 `GET /api/prefetch?lat=&lon=&mode=` starts caching the area around a point in
 the background and returns at once. `GET /api/status` reports the region
 preload (`state`, `done`, `total`, `current`).
+
+Riders' bus times: `GET /api/timings?blat=&blon=&alat=&alon=` lists the times
+at a boarding stop for buses heading toward the alighting stop.
+`POST /api/timings` adds one (`{board:{name,lat,lon}, toward:{name,lat,lon},
+time:"07:40", operator, days, route?, device}`) and `POST /api/timings/vote`
+confirms or flags (`{ids:[...], vote:1|-1, device}`).
 
 Map data © OpenStreetMap contributors, ODbL.

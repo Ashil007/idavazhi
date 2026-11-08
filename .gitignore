@@ -4,6 +4,9 @@
 *.mbtiles
 *.log
 
+# Riders' bus times (data/timings.db): live user data, not source
+data/
+
 # Python
 __pycache__/
 *.pyc

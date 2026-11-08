@@ -624,6 +624,13 @@ function renderPlan(plan, fit) {
               }).join("") + "</ul></details>";
     }
     li.innerHTML = html;
+    // Bus rides: the times riders have added for this stop and direction.
+    if (plan.mode === "bus" && leg.type === "transit" && leg.from && leg.to) {
+      var times = document.createElement("div");
+      times.className = "times";
+      li.appendChild(times);
+      TIMES.attach(times, leg);
+    }
     list.appendChild(li);
   });
 
