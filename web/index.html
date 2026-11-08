@@ -18,6 +18,24 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+<div class="permit" id="permit" hidden role="dialog" aria-modal="true" aria-labelledby="permit-title">
+  <div class="permit__box">
+    <h2 id="permit-title">Before you start</h2>
+    <p class="permit__lead">Vazhi needs two permissions to work. You can't plan a trip without them.</p>
+    <ul class="permit__list">
+      <li><span class="permit__icon" aria-hidden="true">&#128205;</span>
+        <div><b>Location</b><span>Finds the stop nearest you and follows your bus, so Vazhi knows when your stop is near.</span></div>
+        <em class="permit__state" id="permit-geo-state"></em></li>
+      <li><span class="permit__icon" aria-hidden="true">&#9200;</span>
+        <div><b>Alarms</b> (notifications)<span>Wake you before your stop, even when the screen is off or another app is open.</span></div>
+        <em class="permit__state" id="permit-note-state"></em></li>
+    </ul>
+    <p class="permit__help" id="permit-help" hidden></p>
+    <button type="button" class="permit__allow" id="permit-allow" hidden>Allow location and alarms</button>
+    <button type="button" class="permit__again" id="permit-again" hidden>I've allowed them &mdash; check again</button>
+    <p class="permit__foot">You can change this later in your phone's settings.</p>
+  </div>
+</div>
 <div class="ask" id="ask" hidden role="dialog" aria-live="polite" aria-label="A question about a bus stop"></div>
 <div class="alarm" id="alarm" hidden role="alertdialog" aria-labelledby="alarm-title">
   <div class="alarm__box">
@@ -150,6 +168,7 @@
 <script src="times.js"></script>
 <script src="stops.js"></script>
 <script src="install.js"></script>
+<script src="permit.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

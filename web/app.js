@@ -690,8 +690,10 @@ INSTALL.init();
 ALERTS.init();
 STOPS.init();
 setActive("origin");
-// A shared trip already says where from: don't ask for the location then.
-if (!openSharedTrip()) locateUser();
+// Location and alarms are required (permit.js); once both are allowed, find
+// the rider. A shared trip already says where from: don't locate then.
+var sharedTrip = openSharedTrip();
+PERMIT.init(function () { if (!sharedTrip) locateUser(); });
 
 /* ------------------------------------------------- offline data status */
 // The server downloads a region's stations and track at start. Show how far

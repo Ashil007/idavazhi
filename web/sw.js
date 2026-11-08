@@ -10,10 +10,10 @@
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v1";
+var CACHE = "vazhi-shell-v2";
 var SHELL = [
   "/", "index.html", "style.css", "manifest.webmanifest",
-  "basemap.js", "sheet.js", "alerts.js", "times.js", "stops.js", "install.js", "app.js",
+  "basemap.js", "sheet.js", "alerts.js", "times.js", "stops.js", "install.js", "permit.js", "app.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/favicon-32.png",
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",

@@ -64,6 +64,15 @@ back to the public servers elsewhere, or when it is not running.
 
 ### On your phone (trip alarm)
 
+**Location and alarms are required.** Until both are allowed, a screen covers
+the app and asks for them (`web/permit.js`): location to find the nearest stop
+and follow the bus, notifications so the alarm wakes you with the screen off.
+A phone asks only once, so after **Block** the screen explains how to allow
+them in settings and checks again when you come back. It also explains the
+cases where they can't be given here: a page that isn't https, an iPhone where
+Vazhi isn't on the Home Screen (Safari has no alarms in a tab), and in-app
+browsers such as WhatsApp's or Instagram's.
+
 After planning a trip, **Wake me before <stop>** follows your location and
 sounds a loud alarm about 2 km or 4 minutes before each change and your final
 stop, then "This is your stop" on arrival. **Try it: simulate the ride**
@@ -256,7 +265,8 @@ tools/
   routing_server.py starts/stops your own Valhalla routing server (Docker)
   phone_link.py     temporary https link so the app (and trip alarm) works on a phone
   make_icons.py     draws the app icons into web/icons (Pillow)
-web/                Leaflet front end (times.js: bus times, stops.js: stop names)
+web/                Leaflet front end (times.js: bus times, stops.js: stop names,
+                    permit.js: the location and alarm permission screen)
 data/               riders' data (timings.db, stops.db) - live data, not in git
 ```
 
