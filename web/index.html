@@ -42,11 +42,14 @@
         <span class="point__dot point__dot--origin"></span>
         <div class="point__body">
           <span class="point__label">Start</span>
-          <span class="point__value" id="value-origin">Click the map to set</span>
+          <input class="point__input" id="origin-input" type="search" autocomplete="off"
+                 placeholder="Where from? Search a place" aria-label="Start"
+                 aria-autocomplete="list" aria-controls="origin-suggest" />
         </div>
         <button class="mini" id="locate" title="Use your current location as the start">Locate</button>
         <button class="mini" data-random="origin" title="Pick a random point in view">Random</button>
       </div>
+      <ul class="suggest" id="origin-suggest" role="listbox" hidden></ul>
       <div class="point" id="point-destination" data-role="destination">
         <span class="point__dot point__dot--destination"></span>
         <div class="point__body">

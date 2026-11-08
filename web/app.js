@@ -78,8 +78,8 @@ function changeIcon(color) {
 function setPoint(role, latlng, name) {
   state[role] = { lat: latlng.lat, lon: latlng.lng };
   var label = name || latlng.lat.toFixed(5) + ", " + latlng.lng.toFixed(5);
-  if (role === "destination") el("dest-input").value = name || "Point on the map (" + label + ")";
-  else el("value-" + role).textContent = label;
+  el(role === "origin" ? "origin-input" : "dest-input").value =
+    name || "Point on the map (" + label + ")";
   drawPoints();
   prefetch(state[role]);
   if (role === "origin" && !state.destination) setActive("destination");
@@ -172,21 +172,25 @@ document.querySelectorAll(".point").forEach(function (row) {
 
 /* --------------------------------------------------------------- search */
 
-// Destination search: suggestions from every named place in Kerala as you
-// type (the server's local index), online search as a backup.
-(function () {
-  var input = el("dest-input"), list = el("dest-suggest");
+// Place search for the Start and Destination boxes: suggestions from every
+// named place in Kerala as you type (the server's local index), online search
+// as a backup.
+function placeSearch(role, input, list) {
   var timer = null, items = [], active = -1, asked = 0;
 
+  // Rank places near where the trip starts (or near the other end, or the
+  // part of the map in view) first.
   function near() {
-    var p = state.origin || (map ? { lat: map.getCenter().lat, lon: map.getCenter().lng } : null);
-    return p ? "&lat=" + p.lat.toFixed(4) + "&lon=" + p.lon.toFixed(4) : "";
+    var p = (role === "destination" ? state.origin : state.destination) || state.origin ||
+            { lat: map.getCenter().lat, lon: map.getCenter().lng };
+    return "&lat=" + p.lat.toFixed(4) + "&lon=" + p.lon.toFixed(4);
   }
   function close() { list.hidden = true; active = -1; }
   function choose(r) {
-    setPoint("destination", L.latLng(r.lat, r.lon), r.name);
+    setPoint(role, L.latLng(r.lat, r.lon), r.name);
     close();
     input.blur();
+    SHEET.set("half");             // phones: back down, so the map shows the place
     map.setView([r.lat, r.lon], Math.max(map.getZoom(), 14));
   }
   function show(results, empty) {
@@ -214,7 +218,23 @@ document.querySelectorAll(".point").forEach(function (row) {
       })
       .catch(function () { if (ticket === asked) show([], "Search failed - check the connection."); });
   }
-  input.addEventListener("focus", function () { setActive("destination"); if (input.value.trim().length >= 2) ask(false); });
+  input.addEventListener("focus", function () {
+    setActive(role);
+    // Phones: the keyboard takes half the screen, so raise the sheet and put
+    // the box at its top - the suggestions then appear right under it.
+    if (SHEET.isPhone()) {
+      SHEET.set("full");
+      // After the sheet has slid up: scroll the sheet itself so the box sits
+      // just under the handle (the row's offsetParent is the fixed sheet).
+      setTimeout(function () {
+        var row = input.closest(".point");
+        document.querySelector(".panel").scrollTo({ top: Math.max(0, row.offsetTop - 34), behavior: "smooth" });
+      }, 320);
+    }
+    // A coordinate or "Your location" is not a search: select it to overtype.
+    if (/^(Point on the map|Your location)/.test(input.value)) input.select();
+    else if (input.value.trim().length >= 2) ask(false);
+  });
   input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(function () { ask(false); }, 150); });
   input.addEventListener("blur", function () { setTimeout(close, 150); });
   input.addEventListener("keydown", function (e) {
@@ -232,7 +252,9 @@ document.querySelectorAll(".point").forEach(function (row) {
       close();
     }
   });
-})();
+}
+placeSearch("origin", el("origin-input"), el("origin-suggest"));
+placeSearch("destination", el("dest-input"), el("dest-suggest"));
 
 /* ------------------------------------------------------------- progress */
 
@@ -338,8 +360,7 @@ el("clear").addEventListener("click", function () {
   el("plan").disabled = false;
   el("plan").textContent = "Plan journey";
   ["origin", "destination"].forEach(function (r) {
-    if (r === "destination") el("dest-input").value = "";
-    else el("value-" + r).textContent = "Click the map to set";
+    el(r === "origin" ? "origin-input" : "dest-input").value = "";
   });
   routeLayer.clearLayers();
   pointLayer.clearLayers();
@@ -597,7 +618,7 @@ function locateUser() {
     // Your position is the natural start - unless one was set meanwhile.
     if (!state.origin) {
       setPoint("origin", here);
-      el("value-origin").textContent = "Your location";
+      el("origin-input").value = "Your location";
     }
     setWhere("Showing <b>your location</b>" + (acc ? " (within about " + fmtKm(acc) + ")" : "") +
              ". It is set as your start; click the map to choose a destination.");
