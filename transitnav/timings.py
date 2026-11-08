@@ -39,7 +39,8 @@ OPERATORS = {"ksrtc": "KSRTC", "private": "Private bus", "kurtc": "KURTC (city A
 DAYS = {"daily": "Every day", "not_sunday": "Not on Sundays", "sunday": "Sundays only"}
 
 # Abuse limits, per client address, kept in memory only.
-LIMITS = {"report": (20, 3600), "vote": (120, 3600)}
+LIMITS = {"report": (20, 3600), "vote": (120, 3600),
+          "stop": (30, 3600), "stopvote": (200, 3600)}   # stopnames.py
 
 _lock = threading.Lock()
 _hits: dict = defaultdict(deque)

@@ -435,6 +435,51 @@ html, body {
 
 .leg__stops summary { cursor: pointer; color: var(--ink-faint); }
 
+/* Stop names and missing stops, from riders. */
+.stopfix { margin-top: 8px; font-size: 11.5px; color: var(--ink-faint); }
+.stopfix button { font: inherit; border: 0; background: none; padding: 0; color: var(--accent);
+                  cursor: pointer; text-decoration: underline dotted; }
+.stopfix__form label { display: flex; flex-direction: column; gap: 4px; color: var(--ink-dim); }
+.stopfix__form label span { color: var(--ink-faint); }
+.stopfix__form input, .ask__other input, .addstop input {
+  font: inherit; font-size: 14px; padding: 7px 8px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.stopfix__btns { display: flex; gap: 12px; margin-top: 6px; align-items: center; }
+.stopfix__btns button[type=submit], .ask__other button, .addstop button {
+  font: inherit; font-weight: 600; padding: 6px 14px; border: 0; border-radius: 6px;
+  background: var(--accent); color: #fff; cursor: pointer; text-decoration: none; }
+.stopfix__msg, .addstop__msg { margin: 4px 0 0; min-height: 1em; }
+.addstop-btn { margin: 12px 0 0; }
+.addstop { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #1d2633; }
+.addstop label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.addstop input { background: #fff; color: #111; border-color: #c9d1dc; }
+
+.ask { position: fixed; right: 16px; bottom: 16px; z-index: 1500; width: 340px; max-width: calc(100vw - 32px);
+       padding: 14px 14px 12px; border-radius: 12px; background: var(--panel); color: var(--ink);
+       border: 1px solid #f5b642; box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 13px; }
+.ask__close { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: var(--ink-faint);
+              font-size: 20px; line-height: 1; cursor: pointer; padding: 4px; }
+.ask__title { font-weight: 700; font-size: 14px; padding-right: 24px; }
+.ask__text { margin: 4px 0 10px; color: var(--ink-dim); }
+.ask__opts { display: flex; flex-direction: column; gap: 6px; }
+.ask__opts button { font: inherit; text-align: left; padding: 9px 11px; border-radius: 8px; cursor: pointer;
+                    border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+                    display: flex; justify-content: space-between; gap: 8px; }
+.ask__opts button:hover { border-color: #f5b642; }
+.ask__opts button span { color: var(--ink-faint); font-size: 11.5px; white-space: nowrap; }
+.ask__other { display: flex; gap: 6px; margin-top: 8px; }
+.ask__other[hidden] { display: none; }
+.ask__other input { flex: 1; min-width: 0; }
+.ask__btns { display: flex; gap: 14px; margin-top: 10px; }
+.ask__skip { font: inherit; font-size: 12.5px; border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; }
+.ask__msg { margin: 6px 0 0; min-height: 1em; font-size: 12px; color: var(--ink-dim); }
+.ask-ring { animation: askpulse 1.4s ease-in-out infinite; }
+@keyframes askpulse { 50% { stroke-opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .ask-ring { animation: none; } }
+@media (max-width: 860px) {
+  .ask { top: 10px; bottom: auto; left: 10px; right: 10px; width: auto; max-width: none; }
+}
+
 /* Leave by: from riders' bus times, under the trip summary. */
 .leave { margin: 0 0 12px; padding: 12px; border-radius: var(--radius); background: var(--panel-2);
          border: 1px solid var(--bus); }

@@ -119,7 +119,10 @@ function setActive(role) {
     (role === "origin" ? "start point." : "destination.");
 }
 
-map.on("click", function (e) { setPoint(state.active, e.latlng); });
+map.on("click", function (e) {
+  if (STOPS.onMapClick(e.latlng)) return;     // placing a missing bus stop
+  setPoint(state.active, e.latlng);
+});
 
 /* ---------------------------------------------------------------- modes */
 
@@ -631,6 +634,7 @@ function renderPlan(plan, fit) {
       times.className = "times";
       li.appendChild(times);
       TIMES.attach(times, leg, plan);
+      STOPS.fixLinks(li, leg);
     }
     list.appendChild(li);
   });
@@ -648,6 +652,7 @@ function renderPlan(plan, fit) {
     '<div><i style="background:' + access.color + '"></i> ' + access.noun + '</div>' +
     '<div><i style="background:' + color + '"></i> ' + escapeHtml(plan.mode_label) + " line</div>";
   legend.hidden = false;
+  STOPS.afterPlan(plan);   // riders renamed a stop on this trip? ask this rider
 }
 
 function escapeHtml(text) {
@@ -661,6 +666,7 @@ function escapeHtml(text) {
 buildModes();
 SHEET.init();
 ALERTS.init();
+STOPS.init();
 setActive("origin");
 // A shared trip already says where from: don't ask for the location then.
 if (!openSharedTrip()) locateUser();

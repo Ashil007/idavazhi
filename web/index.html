@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+<div class="ask" id="ask" hidden role="dialog" aria-live="polite" aria-label="A question about a bus stop"></div>
 <div class="alarm" id="alarm" hidden role="alertdialog" aria-labelledby="alarm-title">
   <div class="alarm__box">
     <div class="alarm__icon" aria-hidden="true">&#9200;</div>
@@ -104,6 +105,8 @@
 
     <p class="offline" id="offline" hidden></p>
 
+    <button type="button" class="ghost addstop-btn" id="add-stop">Add a missing bus stop</button>
+
     <footer class="panel__foot">
       Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
       contributors. Times are estimates, not a timetable.
@@ -123,6 +126,7 @@
 <script src="sheet.js"></script>
 <script src="alerts.js"></script>
 <script src="times.js"></script>
+<script src="stops.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

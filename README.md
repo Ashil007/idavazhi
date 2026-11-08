@@ -152,6 +152,28 @@ five minutes before that, with the same alarm as the stop alarm (keep the page
 open). The total time above it still allows a typical wait, because a rider's
 time is a report, not a timetable.
 
+### Stop names and missing stops from riders
+
+OpenStreetMap often has a bus stop under an old or odd name, or misses a stop
+where buses really stop. Riders fix both:
+
+- **Wrong stop name?** under a bus ride: give the stop's real name.
+- **Add a missing bus stop**: tap the map where buses stop and name it.
+
+When a rider's trip uses a stop that others have renamed, or passes within
+600 m of a stop riders added, a small card asks them about it: which name is
+right (the map's name is always one of the choices), or whether buses really
+stop there. Each rider backs one name per stop and can change it later; a
+rider is asked about a stop once ("Not sure" waits a week).
+
+A name replaces the map's once **at least 30 riders** back it **and more riders
+back it than any other name**; a tie keeps the map's name, and riders backing
+the map's name can win it back. An added stop is used for planning once at
+least 30 riders confirm it and more say yes than no, under the name most riders
+back. The threshold is `CONFIRM` in `transitnav/stopnames.py`. Stored in
+`data/stops.db`, like bus times: never in git, no IP addresses, one vote per
+browser.
+
 ## How it works
 
 | Stage | What happens |
@@ -209,6 +231,7 @@ transitnav/
   basemap.py        serves the own Kerala map tiles (.mbtiles)
   places.py         search index of every named place in the Kerala map
   timings.py        bus times added, confirmed and flagged by riders
+  stopnames.py      stop names and missing stops from riders (30 must agree)
   timetable.py      Indian Railways timetable: download, index, train search
   router.py         street routing (Valhalla, OSRM) for walk, ride and bus legs
   geo.py            distances, bounding boxes, corridors, polyline maths
@@ -219,8 +242,8 @@ tools/
   build_map.py      builds the Kerala map tiles with tilemaker (Docker)
   routing_server.py starts/stops your own Valhalla routing server (Docker)
   phone_link.py     temporary https link so the app (and trip alarm) works on a phone
-web/                Leaflet front end (times.js: riders' bus times)
-data/               riders' bus times (timings.db) - live data, not in git
+web/                Leaflet front end (times.js: bus times, stops.js: stop names)
+data/               riders' data (timings.db, stops.db) - live data, not in git
 ```
 
 ## API
@@ -245,5 +268,11 @@ at a boarding stop for buses heading toward the alighting stop.
 `POST /api/timings` adds one (`{board:{name,lat,lon}, toward:{name,lat,lon},
 time:"07:40", operator, days, route?, device}`) and `POST /api/timings/vote`
 confirms or flags (`{ids:[...], vote:1|-1, device}`).
+
+Riders' stops: `POST /api/stops/rename` (`{key:"node/123", name, lat, lon,
+map_name, device}`), `POST /api/stops/add` (`{lat, lon, name, device}`),
+`POST /api/stops/answer` (`{key, name?, exists?, device}`), and
+`GET /api/stops/ask?keys=node/1,node/2&points=lat,lon;lat,lon&device=` for the
+questions to put to a rider.
 
 Map data © OpenStreetMap contributors, ODbL.

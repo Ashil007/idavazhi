@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from itertools import product
 
-from . import overpass, router, timetable
+from . import overpass, router, stopnames, timetable
 from .config import (
     ACCESS_MARGIN_FACTOR,
     ACCESS_MODES,
@@ -109,7 +109,10 @@ def _find_stops(origin, destination, cfg, acfg, report):
         tiles, cfg["tile_deg"],
         lambda box: overpass.build_stops_in_bbox_query(box, cfg["stop_filters"]),
         report, cfg["stop_noun"] + "s")
-    stops = _keep_stops(overpass.parse_stops(data), cfg)
+    # Riders' names for stops, and (buses) the stops riders added and confirmed.
+    stops = _keep_stops(stopnames.apply(
+        overpass.parse_stops(data),
+        bbox_around([origin, destination], buffer_m) if cfg["vehicle"] == "bus" else None), cfg)
     if not stops:
         raise PlanError(
             "OpenStreetMap has no %s mapped anywhere near this route. "
@@ -197,7 +200,7 @@ def _stops_in(area, cfg, known):
     else:
         data = overpass.query(overpass.build_stops_in_bbox_query(area, cfg["stop_filters"]))
     ids = {s["id"] for s in known}
-    return known + [s for s in overpass.parse_stops(data) if s["id"] not in ids]
+    return known + [s for s in stopnames.apply(overpass.parse_stops(data)) if s["id"] not in ids]
 
 
 def _network_areas(origin, destination, direct, anchors, cfg, mode):
