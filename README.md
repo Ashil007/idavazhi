@@ -145,6 +145,13 @@ No IP addresses are kept: a browser is known only by a hash of a random id it
 made itself, which allows one vote per time. Adding is limited to 20 times an
 hour per connection.
 
+When riders' times are known for your stop, the trip shows **Leave by**: the
+first reported bus you can still reach (walk to the stop, plus two minutes),
+when to set off, and when you will arrive. **Remind me when to leave** rings
+five minutes before that, with the same alarm as the stop alarm (keep the page
+open). The total time above it still allows a typical wait, because a rider's
+time is a report, not a timetable.
+
 ## How it works
 
 | Stage | What happens |

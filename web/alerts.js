@@ -353,5 +353,9 @@ var ALERTS = (function () {
     });
   }
 
-  return { init: init, attach: attach, stop: stop, isRunning: function () { return running; } };
+  return { init: init, attach: attach, stop: stop, isRunning: function () { return running; },
+           // For other reminders (time to leave for the bus): prime() inside
+           // the tap that sets the reminder, ring() when it is due.
+           prime: prepare,
+           ring: function (title, body) { alarm(title, body, true); } };
 })();

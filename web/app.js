@@ -584,6 +584,7 @@ function renderPlan(plan, fit) {
 
   /* ---- summary ---- */
   var s = plan.summary;
+  TIMES.reset(plan);   // the leave-by line comes back once riders' times load
   el("summary").innerHTML =
     '<div><b>' + s.duration_text + '</b><span>Total time</span></div>' +
     '<div><b>' + s.distance_text + '</b><span>Total distance</span></div>' +
@@ -629,7 +630,7 @@ function renderPlan(plan, fit) {
       var times = document.createElement("div");
       times.className = "times";
       li.appendChild(times);
-      TIMES.attach(times, leg);
+      TIMES.attach(times, leg, plan);
     }
     list.appendChild(li);
   });
