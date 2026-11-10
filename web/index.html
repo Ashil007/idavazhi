@@ -70,19 +70,6 @@
     <p class="offline-note" id="offline-note" hidden>You are offline. Planning a trip needs the
       internet - a trip alarm that is already on keeps working.</p>
 
-    <!-- The two choices the plan depends on, together and highlighted. -->
-    <div class="setup" id="setup">
-      <section class="setup__step" id="modes-block">
-        <h2 class="setup__title"><span class="setup__n" aria-hidden="true">1</span>How are you travelling?</h2>
-        <div class="modes" id="modes"></div>
-      </section>
-
-      <section class="setup__step" id="access-block">
-        <h2 class="setup__title"><span class="setup__n" aria-hidden="true">2</span>Getting to the stop</h2>
-        <div class="modes" id="access"></div>
-      </section>
-    </div>
-
     <section class="block" id="points-block">
       <h2 class="block__title">Points</h2>
       <div class="point" id="point-origin" data-role="origin">
@@ -135,14 +122,13 @@
       <div class="trip" id="trip" hidden>
         <div class="ring trip__when">
           <div class="ring__label" id="ring-label">Ring the alarm</div>
-          <div class="ring__value" aria-live="polite"><b id="ring-num">2</b><span id="ring-unit">km or 4 min</span></div>
-          <div class="ring__sub" id="ring-sub">Default &middot; before your stop, whichever comes first</div>
+          <div class="ring__value" aria-live="polite"><b id="ring-num">2</b><span id="ring-unit">km</span></div>
+          <div class="ring__sub" id="ring-sub">Default &middot; before your stop</div>
           <div class="ring__chips" id="ring-chips" role="radiogroup" aria-labelledby="ring-label"></div>
           <select id="trip-distance" hidden aria-hidden="true" tabindex="-1">
-            <option value="auto">2 km or 4 min before (default)</option>
+            <option value="auto">2 km before (default)</option>
             <option value="500">500 m before</option>
             <option value="1000">1 km before</option>
-            <option value="2000">2 km before</option>
             <option value="3000">3 km before</option>
             <option value="5000">5 km before</option>
             <option value="10000">10 km before</option>
@@ -178,7 +164,10 @@
   <main class="map-wrap">
     <div id="map"></div>
     <div class="maptop">
+      <!-- The two choices every plan depends on: how you travel, and how
+           you reach the stop. -->
       <div class="mapmodes" id="mapmodes" role="group" aria-label="How are you travelling?"></div>
+      <div class="mapmodes" id="mapaccess" role="group" aria-label="Getting to the stop"></div>
       <div class="mapstops">
         <label class="mapstops__row">
           <span>All stops</span>

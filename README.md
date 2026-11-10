@@ -97,7 +97,7 @@ Vazhi isn't on the Home Screen (Safari has no alarms in a tab), and in-app
 browsers such as WhatsApp's or Instagram's.
 
 After planning a trip, **Wake me before <stop>** follows your location and
-sounds a loud alarm about 2 km or 4 minutes before each change and your final
+sounds a loud alarm 2 km (or the distance you pick) before each change and your final
 stop, then "This is your stop" on arrival. **Try it: simulate the ride**
 shows it working without travelling. Keep the page open; the screen stays on
 while alerts run.

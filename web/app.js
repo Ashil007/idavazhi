@@ -170,11 +170,11 @@ function buildStopsSwitch() {
 
 function buildModes() {
   buildStopsSwitch();
-  buildToggle("modes", MODES, "mode");
-  buildToggle("mapmodes", MODES, "mode");     // the same choice, on the map
+  // Both choices sit at the top right of the map.
+  buildToggle("mapmodes", MODES, "mode");
   // Walk or two-wheeler before planning; an Uber is offered on the planned
   // trip itself, once the rider can see how far the stop is.
-  buildToggle("access", { walk: ACCESS.walk, two_wheeler: ACCESS.two_wheeler }, "access");
+  buildToggle("mapaccess", { walk: ACCESS.walk, two_wheeler: ACCESS.two_wheeler }, "access");
 }
 
 document.querySelectorAll(".point").forEach(function (row) {
@@ -368,7 +368,7 @@ function openSharedTrip() {
   var a = point(q.get("from")), b = point(q.get("to"));
   if (!a || !b) return false;
   ["mode", "access"].forEach(function (key) {
-    var btn = document.querySelector("#" + (key === "mode" ? "modes" : "access") +
+    var btn = document.querySelector("#" + (key === "mode" ? "mapmodes" : "mapaccess") +
                                       ' [data-id="' + (q.get(key) || "") + '"]');
     if (btn) btn.click();
   });
@@ -425,7 +425,7 @@ function planJourney() {
   if (!state.mode) {
     NOTICE.show({ tone: "info", title: "How will you travel?",
                   text: "Tap Bus, Train or Metro, then Plan journey." });
-    el("modes").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    el("mapmodes").scrollIntoView({ block: "nearest", behavior: "smooth" });
     return;
   }
   if (!state.origin || !state.destination) {
@@ -521,8 +521,8 @@ function toAction(a) {
   return {
     label: a.label,
     run: function () {
-      if (a.mode) { var m = document.querySelector('#modes [data-id="' + a.mode + '"]'); if (m) m.click(); }
-      if (a.access) { var x = document.querySelector('#access [data-id="' + a.access + '"]'); if (x) x.click(); }
+      if (a.mode) { var m = document.querySelector('#mapmodes [data-id="' + a.mode + '"]'); if (m) m.click(); }
+      if (a.access) { var x = document.querySelector('#mapaccess [data-id="' + a.access + '"]'); if (x) x.click(); }
       planJourney();
     }
   };

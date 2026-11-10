@@ -4,7 +4,7 @@
  * follows their position (or, in demo mode, a pretend position moving along
  * the route) and, for every place they must get off - a change of train or
  * the final stop:
- *   - well before it (WAKE_M, or WAKE_S at the current speed): a loud alarm
+ *   - well before it (WAKE_M, or the distance the rider picked): a loud alarm
  *     that repeats until "I'm awake" is tapped, with vibration and a
  *     notification - the passenger may be asleep;
  *   - on arrival (ARRIVE_M): "this is your stop", notification and vibration.
@@ -15,8 +15,7 @@
 "use strict";
 
 var ALERTS = (function () {
-  var WAKE_M = 2000;        // "auto": wake the rider this far before the stop...
-  var WAKE_S = 240;         // ...or this many seconds before, at current speed
+  var WAKE_M = 2000;        // "auto" (Default): wake the rider this far before the stop
   var SETTING = "vazhi.alarmDistance";   // the rider's own choice, kept on this device
   var ARRIVE_M = 150;       // "this is your stop"
   var SIM_SECONDS = 70;     // demo: the whole trip in about this long
@@ -139,12 +138,11 @@ var ALERTS = (function () {
 
   /* ----------------------------------------------------- tracking */
 
-  // "auto": 2 km, or 4 minutes ahead at the current speed if that is
-  // farther. Otherwise exactly the distance the rider picked.
+  // "auto" (Default): 2 km. Otherwise exactly the distance the rider picked.
   function wakeDistance() {
     var chosen = el("trip-distance") ? el("trip-distance").value : "auto";
     if (chosen !== "auto" && Number(chosen) > 0) return Number(chosen);
-    return Math.max(WAKE_M, speed ? speed * WAKE_S : 0);
+    return WAKE_M;
   }
 
   function loadSetting() {
@@ -163,10 +161,9 @@ var ALERTS = (function () {
   /* The alarm distance, in large type: the choice in big numbers, and one
    * button per distance under it (the <select> behind them keeps the value). */
   var RING = {
-    auto: ["2", "km or 4 min", "Default \u00b7 before your stop, whichever comes first", "Default"],
+    auto: ["2", "km", "Default \u00b7 before your stop", "Default"],
     500: ["500", "m", "before your stop", "500 m"],
     1000: ["1", "km", "before your stop", "1 km"],
-    2000: ["2", "km", "before your stop", "2 km"],
     3000: ["3", "km", "before your stop", "3 km"],
     5000: ["5", "km", "before your stop", "5 km"],
     10000: ["10", "km", "before your stop", "10 km"]
@@ -340,7 +337,7 @@ var ALERTS = (function () {
     }
     var tick = 400, step = total / (SIM_SECONDS * 1000 / tick), idx = 0, into = 0;
     // The pretend clock runs as much faster as the ride is compressed, so the
-    // speed worked out from it - and "4 minutes before" - match the real trip.
+    // speed worked out from it matches the real trip.
     var scale = Math.max(1, (plan.summary.duration_s || SIM_SECONDS) / SIM_SECONDS);
     var clock = Date.now();
     simTimer = setInterval(function () {
