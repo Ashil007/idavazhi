@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Vazhi</title>
 <meta name="description" content="Door-to-door trips by bus, train and metro in Kerala, with an alarm before your stop." />
-<meta name="theme-color" content="#11151c" />
+<meta name="theme-color" content="#0e1218" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
@@ -23,10 +23,10 @@
     <h2 id="permit-title">Before you start</h2>
     <p class="permit__lead">Vazhi needs two permissions to work. You can't plan a trip without them.</p>
     <ul class="permit__list">
-      <li><span class="permit__icon" aria-hidden="true">&#128205;</span>
+      <li><span class="permit__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
         <div><b>Location</b><span>Finds the stop nearest you and follows your bus, so Vazhi knows when your stop is near.</span></div>
         <em class="permit__state" id="permit-geo-state"></em></li>
-      <li><span class="permit__icon" aria-hidden="true">&#9200;</span>
+      <li><span class="permit__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
         <div><b>Alarms</b> (notifications)<span>Wake you before your stop, even when the screen is off or another app is open.</span></div>
         <em class="permit__state" id="permit-note-state"></em></li>
     </ul>
@@ -47,7 +47,7 @@
 <div class="ask" id="ask" hidden role="dialog" aria-live="polite" aria-label="A question about a bus stop"></div>
 <div class="alarm" id="alarm" hidden role="alertdialog" aria-labelledby="alarm-title">
   <div class="alarm__box">
-    <div class="alarm__icon" aria-hidden="true">&#9200;</div>
+    <div class="alarm__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
     <h2 id="alarm-title"></h2>
     <p id="alarm-body"></p>
     <button type="button" id="alarm-ok">I'm awake</button>
@@ -70,15 +70,18 @@
     <p class="offline-note" id="offline-note" hidden>You are offline. Planning a trip needs the
       internet - a trip alarm that is already on keeps working.</p>
 
-    <section class="block" id="modes-block">
-      <h2 class="block__title">Mode of transport</h2>
-      <div class="modes" id="modes"></div>
-    </section>
+    <!-- The two choices the plan depends on, together and highlighted. -->
+    <div class="setup" id="setup">
+      <section class="setup__step" id="modes-block">
+        <h2 class="setup__title"><span class="setup__n" aria-hidden="true">1</span>How are you travelling?</h2>
+        <div class="modes" id="modes"></div>
+      </section>
 
-    <section class="block" id="access-block">
-      <h2 class="block__title">Getting to the stop</h2>
-      <div class="modes" id="access"></div>
-    </section>
+      <section class="setup__step" id="access-block">
+        <h2 class="setup__title"><span class="setup__n" aria-hidden="true">2</span>Getting to the stop</h2>
+        <div class="modes" id="access"></div>
+      </section>
+    </div>
 
     <section class="block" id="points-block">
       <h2 class="block__title">Points</h2>
@@ -132,8 +135,8 @@
       <div class="trip" id="trip" hidden>
         <div class="ring trip__when">
           <div class="ring__label" id="ring-label">Ring the alarm</div>
-          <div class="ring__value" aria-live="polite"><b id="ring-num">Default</b><span id="ring-unit"></span></div>
-          <div class="ring__sub" id="ring-sub">2 km, or 4 minutes, before your stop</div>
+          <div class="ring__value" aria-live="polite"><b id="ring-num">2</b><span id="ring-unit">km or 4 min</span></div>
+          <div class="ring__sub" id="ring-sub">Default &middot; before your stop, whichever comes first</div>
           <div class="ring__chips" id="ring-chips" role="radiogroup" aria-labelledby="ring-label"></div>
           <select id="trip-distance" hidden aria-hidden="true" tabindex="-1">
             <option value="auto">2 km or 4 min before (default)</option>
@@ -146,7 +149,7 @@
           </select>
         </div>
         <label class="switch trip__silent">
-          <span class="switch__icon" aria-hidden="true">&#128243;</span>
+          <span class="switch__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="8" height="18" rx="2"/><path d="M4 8v8"/><path d="M20 8v8"/></svg></span>
           <span class="switch__text"><b>Vibrate only</b><span>No alarm sound</span></span>
           <input type="checkbox" id="trip-silent" role="switch" />
           <span class="switch__track" aria-hidden="true"></span>

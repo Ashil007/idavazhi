@@ -184,6 +184,12 @@ var BASEMAP = (function () {
     layer.getMaplibreMap().setStyle(style(window.location.origin));
   }
 
+  var SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  var SUN = SVG + '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4' +
+            'M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var MOON = SVG + '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
+
   // The light / dark switch, under the zoom buttons.
   function themeControl(map) {
     var Ctl = L.Control.extend({
@@ -194,7 +200,7 @@ var BASEMAP = (function () {
         btn.href = "#";
         btn.setAttribute("role", "button");
         function show() {
-          btn.textContent = theme === "dark" ? "☀" : "☾";   // sun / moon
+          btn.innerHTML = theme === "dark" ? SUN : MOON;
           btn.title = theme === "dark" ? "Light map" : "Dark map";
           btn.setAttribute("aria-label", btn.title);
           document.documentElement.setAttribute("data-map-theme", theme);

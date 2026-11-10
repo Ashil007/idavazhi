@@ -63,7 +63,7 @@ var ALERTS = (function () {
     var t = targetsOf(p);
     if (!t.length) { box.hidden = true; return; }
     box.hidden = false;
-    el("trip-start").textContent = "⏰ Wake me before " + t[t.length - 1].name;
+    el("trip-start").textContent = "Wake me before " + t[t.length - 1].name;
     if (running) {            // switched route options mid-trip: follow the new one
       targets = t;
       fired = {};
@@ -163,7 +163,7 @@ var ALERTS = (function () {
   /* The alarm distance, in large type: the choice in big numbers, and one
    * button per distance under it (the <select> behind them keeps the value). */
   var RING = {
-    auto: ["Default", "", "2 km, or 4 minutes, before your stop", "Default"],
+    auto: ["2", "km or 4 min", "Default \u00b7 before your stop, whichever comes first", "Default"],
     500: ["500", "m", "before your stop", "500 m"],
     1000: ["1", "km", "before your stop", "1 km"],
     2000: ["2", "km", "before your stop", "2 km"],

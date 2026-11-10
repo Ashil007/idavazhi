@@ -594,9 +594,8 @@ function renderOptions(plan) {
   });
 }
 
-// Opens the Uber app (or m.uber.com without it) with the pickup and the
-// drop-off at the stop already filled in. Uber's universal link:
-// developer.uber.com/docs/riders/ride-requests/tutorials/deep-links
+// Opens the Uber app (or m.uber.com without it) with the stop as the
+// destination; Uber takes the pickup from the phone's location.
 function uberLink(plan, leg) {
   var i = plan.legs.indexOf(leg);
   var next = plan.legs.slice(i + 1).filter(function (l) { return l.type === "transit"; })[0];
@@ -605,22 +604,15 @@ function uberLink(plan, leg) {
     ? { lat: next.from.lat, lon: next.from.lon, name: next.from.name }
     : end ? { lat: end[0], lon: end[1], name: leg.label.replace(/^(Cab|Walk|Ride|Bus or auto-rickshaw|Bus or taxi) to /, "") } : null;
   if (!stop) return null;
-  var q = ["action=setPickup"];
-  var o = state.origin;
-  if (o && o.gps) {
-    q.push("pickup=my_location");
-  } else {
-    q.push("pickup[latitude]=" + plan.origin.lat.toFixed(6),
-           "pickup[longitude]=" + plan.origin.lon.toFixed(6));
-    var start = el("origin-input").value;
-    if (start && !/^Point on the map/.test(start)) {
-      q.push("pickup[nickname]=" + encodeURIComponent(start));
-    }
-  }
-  q.push("dropoff[latitude]=" + Number(stop.lat).toFixed(6),
-         "dropoff[longitude]=" + Number(stop.lon).toFixed(6));
-  if (stop.name) q.push("dropoff[nickname]=" + encodeURIComponent(stop.name));
-  return "https://m.uber.com/ul/?" + q.join("&");
+  // Uber's current link (developer.uber.com, "Introduction to Deep Links"):
+  // the destination as a JSON place in drop[0]. The older /ul/?dropoff[...]
+  // link opens the app but leaves "Where to?" empty. No pickup is given, so
+  // Uber picks the rider up where the phone is.
+  var drop = { latitude: Number(Number(stop.lat).toFixed(6)),
+               longitude: Number(Number(stop.lon).toFixed(6)),
+               addressLine1: stop.name || "Bus stop",
+               addressLine2: "Kerala" };
+  return "https://m.uber.com/looking?drop%5B0%5D=" + encodeURIComponent(JSON.stringify(drop));
 }
 
 // The first stretch of a trip (the walk or ride to the first stop) gets an
@@ -659,7 +651,7 @@ function uberButton(plan, leg) {
                 escapeHtml(stop || "this stop") + "</span>";
   var note = document.createElement("p");
   note.className = "cab-book__note";
-  note.textContent = "Opens the Uber app with your pickup and this stop filled in. " +
+  note.textContent = "Opens Uber with your current location as the pickup and this stop as where to. " +
                      "Check the fare there before you book.";
   wrap.appendChild(a);
   wrap.appendChild(note);
