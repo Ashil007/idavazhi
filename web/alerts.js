@@ -44,14 +44,53 @@ var ALERTS = (function () {
     var rides = p.legs.filter(function (l) { return l.type === "transit"; });
     return rides.map(function (leg, i) {
       var next = rides[i + 1];
+      // Everything the rider covers until getting off here: the walk or
+      // ride to the first stop and every ride up to this stop.
+      var upto = p.legs.slice(0, p.legs.indexOf(leg) + 1), path = [];
+      upto.forEach(function (l) { path = path.concat(l.geometry || []); });
       return {
         name: (leg.to && leg.to.name) || "your stop",
         at: [leg.to.lat, leg.to.lon],
+        route: routeOf(path),
         final: !next,
         nextLabel: next ? next.label : null,
         vehicle: leg.label
       };
     });
+  }
+
+  // A path with the distance left to its end from every point.
+  function routeOf(path) {
+    var left = new Array(path.length);
+    left[path.length - 1] = 0;
+    for (var k = path.length - 2; k >= 0; k--) left[k] = left[k + 1] + haversine(path[k], path[k + 1]);
+    return { path: path, left: left };
+  }
+
+  // Off the route by more than this (the bus took another road), the
+  // straight-line distance is used instead.
+  var OFF_ROUTE_M = 500;
+
+  // How far is left to the stop along the route, the way the trip's
+  // "Total distance" counts it - not as the crow flies, which is shorter
+  // on any road that bends. Straight line when off the route.
+  function distanceLeft(here, t) {
+    var straight = haversine(here, t.at), r = t.route;
+    if (!r || r.path.length < 2) return straight;
+    var best = null;
+    for (var k = 0; k < r.path.length - 1; k++) {
+      var a = r.path[k], b = r.path[k + 1];
+      var kx = 111320 * Math.cos((a[0] + b[0]) / 2 * Math.PI / 180), ky = 111320;
+      var bx = (b[1] - a[1]) * kx, by = (b[0] - a[0]) * ky;
+      var px = (here[1] - a[1]) * kx, py = (here[0] - a[0]) * ky;
+      var seg = bx * bx + by * by;
+      var f = seg ? Math.max(0, Math.min(1, (px * bx + py * by) / seg)) : 0;
+      var off = Math.hypot(px - bx * f, py - by * f);
+      if (best === null || off < best.off) {
+        best = { off: off, left: r.left[k + 1] + Math.sqrt(seg) * (1 - f) };
+      }
+    }
+    return best.off > OFF_ROUTE_M ? straight : best.off + best.left;
   }
 
   // Called whenever a plan (or another route option) is shown.
@@ -227,7 +266,7 @@ var ALERTS = (function () {
     var i = nextTarget();
     if (i < 0) return;
     var t = targets[i];
-    var dist = haversine(last.at, t.at);
+    var dist = distanceLeft(last.at, t);
     var secs = speed && speed > 1 ? dist / speed : null;
     var wakeAt = wakeDistance();
 
