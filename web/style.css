@@ -243,6 +243,10 @@ html, body {
 [data-map-theme="dark"] .leaflet-bar a:hover { background: #2a2f37; }
 [data-map-theme="dark"] .leaflet-control-attribution { background: rgba(20,22,25,.75); color: #8a9099; }
 [data-map-theme="dark"] .leaflet-control-attribution a { color: #9cc7ff; }
+/* The theme button swaps its icon when tapped. If the tap landed on the
+   icon, Leaflet could no longer trace it back to the button and set a map
+   point instead: let taps go to the button itself. */
+.map-theme svg { pointer-events: none; }
 /* The map credit folded into a small (i) button (basemap.js). */
 .leaflet-control-attribution.credit--folded {
   font-size: 0; width: 20px; height: 20px; padding: 0; margin: 0 6px 6px 0;
@@ -744,6 +748,8 @@ html, body {
 .mapstops__key li { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
 .mapstops__key i { width: 6px; height: 6px; border-radius: 50%; margin: 0 3px; flex: none; }
 .mapstops__key i.big { width: 10px; height: 10px; margin: 0 1px; box-shadow: 0 0 0 2px #0d0e10; }
+.mapstops__key b.stand { display: block; width: 18px; height: 18px; margin: 0 -3px 0 -3px; flex: none; }
+.mapstops__key b.stand svg { display: block; width: 18px; height: 18px; }
 
 .legend {
   background: rgba(27,34,44,.94);

@@ -69,10 +69,10 @@ var BASEMAP = (function () {
                         "circle-stroke-color": C.halo,
                         "circle-stroke-width": ring } };
     }
-    function label(id, filter, minzoom, size, color) {
+    function label(id, filter, minzoom, size, color, below) {
       return { id: id, type: "symbol", source: T, minzoom: minzoom, filter: filter,
                layout: { "text-field": ["coalesce", ["get", "n"], ""], "text-font": FONT_M, "text-size": size,
-                         "text-offset": [0, 0.9], "text-anchor": "top", "text-optional": true },
+                         "text-offset": [0, below || 0.9], "text-anchor": "top", "text-optional": true },
                paint: { "text-color": color, "text-halo-color": C.halo, "text-halo-width": 1.5 } };
     }
     var station = ["match", ["get", "k"], ["rail", "metro"], true, false];
@@ -80,10 +80,13 @@ var BASEMAP = (function () {
     return [
       dot("stops-bus", kindIs("bus"), 10, STOP_COLORS.bus, 1.4, 5,
           ["interpolate", ["linear"], ["zoom"], 12, 0, 14, 1]),
-      dot("stops-stand", kindIs("stand"), 8, STOP_COLORS.stand, 2.5, 8, 2),
+      // Bus stands: a square badge with a bus in it, not a dot.
+      { id: "stops-stand", type: "symbol", source: T, minzoom: 8, filter: kindIs("stand"),
+        layout: { "icon-image": "bus-stand", "icon-allow-overlap": true,
+                  "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.5, 13, 0.8, 16, 1] } },
       dot("stops-station", station, 6, stationColor, 3, 9, 2),
       label("stops-bus-name", kindIs("bus"), 15, 11, C.textSoft),
-      label("stops-stand-name", kindIs("stand"), 12, 12, C.text),
+      label("stops-stand-name", kindIs("stand"), 12, 12, C.text, 1.3),
       label("stops-station-name", station, 9, 12, stationColor)
     ];
   }
@@ -218,6 +221,32 @@ var BASEMAP = (function () {
     };
   }
 
+  // The bus-stand badge: a green rounded square with a white bus, drawn
+  // here so it needs no image file. 26 px, sharp on high-density screens.
+  function busStandIcon() {
+    var r = 2, s = 26 * r, c = document.createElement("canvas");
+    c.width = c.height = s;
+    var g = c.getContext("2d");
+    function rounded(x, y, w, h, rad) {
+      g.beginPath();
+      g.moveTo(x + rad, y); g.arcTo(x + w, y, x + w, y + h, rad); g.arcTo(x + w, y + h, x, y + h, rad);
+      g.arcTo(x, y + h, x, y, rad); g.arcTo(x, y, x + w, y, rad); g.closePath();
+    }
+    rounded(1 * r, 1 * r, 24 * r, 24 * r, 6 * r);           // white edge
+    g.fillStyle = "#ffffff"; g.fill();
+    rounded(3 * r, 3 * r, 20 * r, 20 * r, 4.5 * r);         // green badge
+    g.fillStyle = STOP_COLORS.stand; g.fill();
+    g.fillStyle = "#ffffff";                                // the bus
+    rounded(7.5 * r, 6.5 * r, 11 * r, 11 * r, 2 * r); g.fill();
+    g.fillRect(8.5 * r, 17 * r, 2.5 * r, 2.5 * r);           // wheels
+    g.fillRect(15 * r, 17 * r, 2.5 * r, 2.5 * r);
+    g.fillStyle = STOP_COLORS.stand;
+    g.fillRect(9 * r, 8.5 * r, 8 * r, 4 * r);               // windscreen
+    g.beginPath(); g.arc(10 * r, 15 * r, 1 * r, 0, 7); g.fill();   // lights
+    g.beginPath(); g.arc(16 * r, 15 * r, 1 * r, 0, 7); g.fill();
+    return { image: g.getImageData(0, 0, s, s), pixelRatio: r };
+  }
+
   // With "All stops" on, the stop layers name the stations; the base map's
   // own station names would print each one twice.
   function withStops(layers) {
@@ -311,6 +340,14 @@ var BASEMAP = (function () {
       return;
     }
     layer = L.maplibreGL({ style: style(window.location.origin), attribution: ATTR }).addTo(map);
+    // Each new style (theme or "All stops" switched) starts without images:
+    // hand over the bus-stand badge whenever the map asks for it.
+    var gl = layer.getMaplibreMap();
+    gl.on("styleimagemissing", function (e) {
+      if (e.id !== "bus-stand" || gl.hasImage("bus-stand")) return;
+      var icon = busStandIcon();
+      gl.addImage("bus-stand", icon.image, { pixelRatio: icon.pixelRatio });
+    });
     themeControl(map);
     foldingCredit(map);
   }
