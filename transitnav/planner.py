@@ -380,6 +380,54 @@ def _usable_pairs(origin_stops, dest_stops):
     return pairs
 
 
+# A bus stops on both sides of the road, and the map usually has one stop for
+# each side. Routing to the stop on the far side sends the bus past it to the
+# next U-turn and back: Kodamthuruthu to Chandiroor Junction rode 1.1 km up
+# NH 66 and back again. Where the ride passes this close to the stop with
+# more than OVERSHOOT_M still to go, the ride ends (or starts) right there:
+# the rider gets off across the road from the stop and crosses. The walk is
+# still measured from the chosen stop - the map often has no crossing at a
+# junction, and walking via the bus's U-turn is not what anyone does.
+TWIN_STOP_M = 60.0
+OVERSHOOT_M = 150.0
+
+
+def _close_pass(coords, stop):
+    """Where the path first passes within TWIN_STOP_M of `stop`, at the
+    closest point of that pass: (segment index, point, gap in m), or None."""
+    best = None
+    for i in range(len(coords) - 1):
+        a, b = coords[i], coords[i + 1]
+        gap, t = point_to_segment_m(stop["lat"], stop["lon"], a[0], a[1], b[0], b[1])
+        if gap <= TWIN_STOP_M:
+            if best is None or gap < best[2]:
+                best = (i, [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], gap)
+        elif best is not None:
+            break   # that pass is over
+    return best
+
+
+def _cut_after_pass(coords, stop):
+    """`coords` ending where it first passes `stop`, then across to the stop,
+    when the path goes on from there and comes back; unchanged otherwise."""
+    hit = _close_pass(coords, stop)
+    if hit is None:
+        return coords
+    i, point, gap = hit
+    if path_length([point] + coords[i + 1:]) <= gap + OVERSHOOT_M:
+        return coords   # the normal last few metres up to the stop
+    return coords[:i + 1] + [point, [stop["lat"], stop["lon"]]]
+
+
+def _no_overshoot(coords, board, alight):
+    """The bus ride without a loop past either stop and back (see
+    TWIN_STOP_M): (coords, share of the original length still ridden)."""
+    full = path_length(coords)
+    out = _cut_after_pass(coords, alight)
+    out = _cut_after_pass(out[::-1], board)[::-1]
+    return out, (path_length(out) / full if full else 1.0)
+
+
 def _route_transit(graph, origin_stops, dest_stops, cfg, report, access_mps):
     """Pick a boarding/alighting pair and trace the vehicle path between them.
 
@@ -407,6 +455,8 @@ def _route_transit(graph, origin_stops, dest_stops, cfg, report, access_mps):
         # Draw the leg from platform to platform, not from the track nodes.
         coords = ([[board["lat"], board["lon"]]] + graph.path_coords(node_path)
                   + [[alight["lat"], alight["lon"]]])
+        if cfg["vehicle"] == "bus":
+            coords, _ = _no_overshoot(coords, board, alight)
         # The search cost includes interchange penalties, so measure the
         # geometry for the distance the rider actually covers.
         ride_m = path_length(coords)
@@ -443,10 +493,13 @@ def _route_bus_fast(origin_stops, dest_stops, cfg, report, access_mps):
     best = None
     for (board, alight), hit in zip(pairs, found):
         if hit is not None:
+            coords, kept = _no_overshoot(hit[0], board, alight)
+            metres = hit[1] * kept
+            road_s = None if hit[2] is None else hit[2] * kept
             secs = ((board["distance_m"] + alight["distance_m"]) / access_mps
-                    + _bus_ride_seconds(cfg, hit[1], hit[2]))
+                    + _bus_ride_seconds(cfg, metres, road_s))
             if best is None or secs < best[0]:
-                best = (secs, board, alight, hit[0], hit[1], hit[2])
+                best = (secs, board, alight, coords, metres, road_s)
     if best is None:
         return None
     _, board, alight, coords, metres, road_s = best
@@ -1052,6 +1105,9 @@ def _bus_options(result, cfg, all_stops, board, alight, wait_s, report):
     n_transit = next(i for i, l in enumerate(result["legs"]) if l["type"] == "transit")
     options = []
     for k, alt in enumerate(found):
+        coords, kept = _no_overshoot(alt["coords"], board, alight)
+        alt = dict(alt, coords=coords, metres=alt["metres"] * kept,
+                   seconds=None if alt["seconds"] is None else alt["seconds"] * kept)
         stops = _likely_stops(_intermediate_stops(all_stops, alt["coords"], board, alight, cfg),
                               cfg, alt["metres"])
         ride = _bus_ride_seconds(cfg, alt["metres"], alt["seconds"], len(stops)) + wait_s
