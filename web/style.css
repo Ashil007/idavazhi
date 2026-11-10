@@ -230,9 +230,12 @@ html, body {
 [data-map-theme="dark"] #map { background: #121316; }
 [data-map-theme="dark"] .leaflet-bar { border-color: rgba(255,255,255,.12); box-shadow: 0 2px 10px rgba(0,0,0,.5); }
 [data-map-theme="dark"] .leaflet-bar a {
-  background: #1f2329; color: #e8edf4; border-bottom-color: rgba(255,255,255,.1);
+  background: rgba(31,35,41,.7); color: #e8edf4; border-bottom-color: rgba(255,255,255,.1);
 }
-[data-map-theme="dark"] .leaflet-bar a:hover { background: #2a2f37; }
+[data-map-theme="dark"] .leaflet-bar a:hover { background: rgba(42,47,55,.8); }
+/* Every control over the map is 30% see-through (the light map too). */
+.leaflet-bar a { background-color: rgba(255,255,255,.7); }
+.leaflet-bar a:hover { background-color: rgba(244,244,244,.8); }
 [data-map-theme="dark"] .leaflet-control-attribution { background: rgba(20,22,25,.75); color: #8a9099; }
 [data-map-theme="dark"] .leaflet-control-attribution a { color: #9cc7ff; }
 /* The theme button swaps its icon when tapped. If the tap landed on the
@@ -692,10 +695,9 @@ html, body {
 .mapmodes {
   display: flex; gap: 4px;
   padding: 4px;
-  background: rgba(13,17,23,.9);
+  background: rgba(13,17,23,.7);
   border-radius: 14px;
   box-shadow: var(--sh-3);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
 .mapmodes .mode {
   flex-direction: row; gap: 6px;
@@ -708,15 +710,15 @@ html, body {
 .mapmodes .mode svg { width: 18px; height: 18px; }
 .mapmodes .mode:hover { background: var(--panel-3); color: var(--ink); }
 .mapmodes .mode[aria-pressed="true"] {
-  background: var(--mode-color); color: #0a0e13; box-shadow: var(--sh-1);
+  background: color-mix(in srgb, var(--mode-color) 70%, transparent);
+  color: #0a0e13; box-shadow: var(--sh-1);
 }
 .mapmodes .mode[aria-pressed="true"] svg { color: currentColor; }
 
 .mapstops {
-  background: rgba(13,17,23,.9);
+  background: rgba(13,17,23,.7);
   border-radius: 14px;
   box-shadow: var(--sh-3);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   padding: 4px 4px 4px 14px;
   font-size: 14px; font-weight: 600; color: var(--ink);
 }
@@ -745,7 +747,7 @@ html, body {
 .mapstops__key b.stand svg { display: block; width: 18px; height: 18px; }
 
 .legend {
-  background: rgba(23,31,43,.94);
+  background: rgba(23,31,43,.7);
   box-shadow: var(--sh-3);
   border-radius: 14px;
   padding: 8px 12px;
@@ -1073,7 +1075,7 @@ html, body {
   .drawer-tab {
     position: fixed; left: 0; top: 42%; z-index: 1100; display: block;
     padding: 16px 14px 16px 12px; border-radius: 0 16px 16px 0; cursor: pointer;
-    background: var(--amber); color: var(--amber-ink); border: 0;
+    background: color-mix(in srgb, var(--amber) 70%, transparent); color: var(--amber-ink); border: 0;
     font: inherit; font-size: 18px; font-weight: 700;
     box-shadow: var(--sh-3);
   }
