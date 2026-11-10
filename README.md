@@ -129,7 +129,13 @@ planning.
 
 - **Type in Where from / Where to** for suggestions from every named place in
   Kerala (online search as a backup), or **click the map** to place the
-  highlighted point. Drag a marker to move it.
+  highlighted point. Drag a marker to move it. The place list holds every
+  named thing in Kerala's OpenStreetMap data (about 377,000: villages,
+  junctions, bus stops, offices, temples, shops), read from the full Kerala
+  file with pyosmium (`pip install osmium`; without it, from the map tiles,
+  which hold fewer). Any English spelling of a Malayalam name finds it:
+  Kuthiathode, Kuthiyathode and Kuthiyathodu all match, as do Kozhikode and
+  Kozhikkode. Rebuild by hand with `python -m transitnav.places`.
 - **☆ saves a place**: with the box empty, your saved and recent places are
   listed first.
 - Pick a **mode**, pick **Walk** or **Two-wheeler** for getting to and from the
@@ -263,7 +269,7 @@ transitnav/
   preload.py        downloads a region's stations and track to disk at start
   locate.py         your district from your internet connection (location fallback)
   basemap.py        serves the own Kerala map tiles (.mbtiles)
-  places.py         search index of every named place in the Kerala map
+  places.py         search index of every named place in Kerala (OSM file + tiles)
   timings.py        bus times added, confirmed and flagged by riders
   stopnames.py      stop names and missing stops from riders (30 must agree)
   timetable.py      Indian Railways timetable: download, index, train search

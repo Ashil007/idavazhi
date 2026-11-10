@@ -1,12 +1,22 @@
-"""Search for places: every named place in the app's own Kerala map.
+"""Search for places: every named place in Kerala's OpenStreetMap data.
 
 The online place search (Nominatim) finds what OpenStreetMap has an address
 for, which leaves out many everyday destinations. The Kerala map tiles
 (tools/build_map.py) already hold every named thing in OpenStreetMap there -
 shops and malls, schools, temples, churches, mosques, hospitals, offices, bus
 stops and stations, streets, villages and neighbourhoods. This module reads
-those names out of the tiles once into a small SQLite full-text index
+those names once into a small SQLite full-text index
 (.cache/places/places.db) and searches it as the user types.
+
+Where the names come from: the full Kerala OpenStreetMap file
+(.cache/osm/kerala-latest.osm.pbf, read with pyosmium) when it is there -
+every named node and way, including the small ones the map tiles leave out
+(a village's post office, a junction's bus stop). Without it, the map tiles.
+
+Spelling: Malayalam names are written in English many ways - Kuthiathode,
+Kuthiyathode, Kuthiyathodu; Kozhikode, Kozhikkode. Every name also gets a
+sound-alike key (_sound) that is the same for all of these, and the search
+looks in both: exact spellings first, sound-alikes after.
 
 Each place records the nearest town or village, so "Lulu Mall" is shown as
 "Shopping mall · Edappally, Kochi" rather than as a bare name.
@@ -30,6 +40,8 @@ from .geo import haversine
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, ".cache", "places", "places.db")
+PBF = os.path.join(ROOT, ".cache", "osm", "kerala-latest.osm.pbf")
+INDEX_VERSION = "2"             # bump to rebuild old indexes (2: OSM file + sound keys)
 ZOOM = 14                        # the most detailed tiles hold every named object
 
 # What a place is, by its tile layer and class: (label shown, search weight).
@@ -201,15 +213,192 @@ def _names(props):
     return main, others
 
 
+# ------------------------------------------------------- spelling
+
+_SOUNDS = [("zh", "l"), ("th", "t"), ("dh", "d"), ("kh", "k"), ("gh", "g"), ("bh", "b"),
+           ("ph", "f"), ("sh", "s"), ("ch", "c"), ("c", "k"), ("q", "k"), ("w", "v"),
+           ("ee", "i"), ("oo", "u"), ("iy", "i"), ("ey", "e"), ("ay", "a"), ("z", "s")]
+
+
+def _sound(word):
+    """One word as it sounds, so English spellings of the same Malayalam name
+    agree: kuthiathode, kuthiyathodu -> kutiatod; kozhikkode -> kolikod."""
+    w = re.sub(r"[^a-z]", "", word.lower())
+    for a, b in _SOUNDS:
+        w = w.replace(a, b)
+    w = re.sub(r"(.)\1+", r"\1", w)             # kk -> k, aa -> a
+    if len(w) > 3 and w[-1] in "aeiou":           # -odu / -ode / -oda alike
+        w = w[:-1]
+    return w
+
+
+def _sound_key(*texts):
+    words = []
+    for t in texts:
+        words += re.findall(r"[A-Za-z]+", t or "")
+    keys = []
+    for w in words:
+        k = _sound(w)
+        if k and k not in keys:
+            keys.append(k)
+    return " ".join(keys)
+
+
+# ------------------------------------------------------ OSM file
+# What a named OSM object is: (label shown, search weight), from its tags.
+
+AMENITY = {
+    "hospital": ("Hospital", 6), "clinic": ("Clinic", 4), "doctors": ("Clinic", 3),
+    "pharmacy": ("Pharmacy", 4), "school": ("School", 4), "college": ("College", 6),
+    "university": ("University", 7), "place_of_worship": ("Place of worship", 4),
+    "bank": ("Bank", 4), "atm": ("ATM", 2), "fuel": ("Petrol pump", 3), "police": ("Police", 4),
+    "post_office": ("Post office", 4), "townhall": ("Office", 5), "library": ("Library", 3),
+    "cinema": ("Cinema", 5), "restaurant": ("Restaurant", 4), "cafe": ("Cafe", 3),
+    "fast_food": ("Restaurant", 3), "marketplace": ("Market", 5), "community_centre": ("Hall", 3),
+    "courthouse": ("Court", 4), "ferry_terminal": ("Boat jetty", 6), "bus_station": ("Bus stand", 8),
+    "kindergarten": ("School", 2), "childcare": ("Anganwadi", 2), "veterinary": ("Vet", 3),
+    "taxi": ("Taxi stand", 3), "auditorium": ("Hall", 4), "conference_centre": ("Hall", 4),
+    "parking": ("Parking", 1), "toilets": ("Toilet", 1), "parking_entrance": ("Parking", 1),
+    "waste_basket": None, "bench": None, "drinking_water": ("Drinking water", 1),
+}
+TOURISM = {"hotel": ("Hotel", 4), "guest_house": ("Hotel", 3), "resort": ("Resort", 4),
+           "attraction": ("Attraction", 6), "viewpoint": ("Viewpoint", 5),
+           "museum": ("Museum", 6), "zoo": ("Zoo", 6), "theme_park": ("Theme park", 6)}
+LEISURE = {"park": ("Park", 4), "stadium": ("Stadium", 6), "sports_centre": ("Sports ground", 3),
+           "pitch": ("Sports ground", 2), "beach_resort": ("Beach", 5), "playground": ("Park", 2)}
+ROADS = {"motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential",
+         "service", "living_street", "road", "track", "pedestrian", "footway", "path"}
+NAME_TAGS = ("name:en", "name", "name:latin", "int_name", "name:ml", "alt_name", "old_name",
+             "loc_name", "official_name", "short_name", "alt_name:en", "name:ml-Latn")
+
+
+def _osm_kind(t):
+    g = t.get
+    if g("place"):
+        return PLACE_KINDS.get(g("place"), ("Place", 3))
+    if g("aeroway") == "aerodrome":
+        return "Airport", 9
+    if g("railway") in ("station", "halt") or (g("public_transport") == "station" and g("train") == "yes"):
+        return ("Metro station", 8) if g("station") in ("subway", "light_rail") else ("Station", 8)
+    if g("amenity") == "bus_station":
+        return "Bus stand", 8
+    if g("highway") == "bus_stop" or (g("public_transport") == "platform" and g("bus") == "yes"):
+        return "Bus stop", 4
+    if g("amenity"):
+        return AMENITY.get(g("amenity"), (g("amenity").replace("_", " ").capitalize(), 3))
+    if g("shop"):
+        return {"mall": ("Shopping mall", 8), "supermarket": ("Supermarket", 5)}.get(g("shop"), ("Shop", 4))
+    if g("tourism"):
+        return TOURISM.get(g("tourism"), ("Place", 3))
+    if g("leisure"):
+        return LEISURE.get(g("leisure"), ("Place", 3))
+    if g("office") or g("government"):
+        return "Office", 4
+    if g("historic"):
+        return "Attraction", 4
+    if g("natural") == "beach":
+        return "Beach", 5
+    if g("natural") in ("water", "bay") or g("waterway") in ("river", "canal") or g("water"):
+        return "Water", 2
+    if g("highway") in ROADS or g("man_made") == "bridge" or g("bridge"):
+        return "Street", 2
+    if g("landuse") in ("residential", "retail", "commercial"):
+        return "Area", 3
+    if g("building") in ("house", "residential", "detached", "hut"):
+        return None                               # people's homes: not destinations
+    if g("boundary") or g("route") or g("type") in ("route", "multipolygon", "boundary"):
+        return None
+    return "Place", 2
+
+
+def _osm_names(t):
+    names = []
+    for k in NAME_TAGS:
+        for v in (t.get(k) or "").split(";"):
+            v = v.strip()
+            if v and v not in names:
+                names.append(v)
+    if not names:
+        return None, ""
+    latin = [n for n in names if re.search(r"[A-Za-z]", n)]
+    main = latin[0] if latin else names[0]
+    return main, " ".join(n for n in names if n != main)
+
+
+def _from_pbf(log):
+    """Every named node and way in the Kerala OSM file."""
+    import osmium                                  # optional: pip install osmium
+    seen, places = set(), []
+    fp = osmium.FileProcessor(PBF, osmium.osm.NODE | osmium.osm.WAY).with_locations()
+    for o in fp:
+        tags = o.tags
+        if "name" not in tags and "name:en" not in tags and "name:ml" not in tags:
+            continue
+        t = {k: v for k, v in tags}
+        kind = _osm_kind(t)
+        if kind is None:
+            continue
+        main, others = _osm_names(t)
+        if not main:
+            continue
+        try:
+            if o.is_node():
+                lat, lon = o.location.lat, o.location.lon
+            else:
+                nodes = o.nodes
+                mid = nodes[len(nodes) // 2]
+                if not mid.location.valid():
+                    continue
+                lat, lon = mid.location.lat, mid.location.lon
+        except Exception:  # noqa: BLE001 - a way cut at the file's edge
+            continue
+        label, weight = kind
+        key = (main.lower(), label, round(lat, 2), round(lon, 2))
+        if key in seen:
+            continue
+        seen.add(key)
+        layer = "place" if t.get("place") else "osm"
+        places.append([main, others, label, layer, weight, lat, lon, ""])
+    return places, "kerala-latest.osm.pbf"
+
+
 def build(log=print):
-    """Read every named feature out of the newest map tiles into the index."""
-    path = basemap.newest_build()
-    if path is None:
-        log("  place search: no map tiles yet (run tools/build_map.py)")
-        return False
+    """Read every named place into the index: from the OSM file when there is
+    one (and pyosmium is installed), else from the newest map tiles."""
     started = time.time()
     with _lock:
         _building["state"] = "running"
+    places = None
+    if os.path.exists(PBF):
+        try:
+            places, source = _from_pbf(log)
+        except ImportError:
+            log("  place search: pyosmium not installed (pip install osmium) - "
+                "using the map tiles, which hold fewer names")
+    if places is None:
+        places, source = _from_tiles(log)
+        if places is None:
+            with _lock:
+                _building["state"] = "idle"
+            return False
+    elif basemap.newest_build():
+        # The tiles also name big areas the file maps as relations (campuses,
+        # temple grounds): add what the file did not already give.
+        tiles, tile_source = _from_tiles(log)
+        have = set((p[0].lower(), round(p[5], 2), round(p[6], 2)) for p in places)
+        extra = [p for p in tiles or []
+                 if (p[0].lower(), round(p[5], 2), round(p[6], 2)) not in have]
+        places += extra
+        source += " + %s more from %s" % (format(len(extra), ","), tile_source)
+    return _write(places, source, started, log)
+
+
+def _from_tiles(log):
+    """Every named feature in the newest map tiles."""
+    path = basemap.newest_build()
+    if path is None:
+        log("  place search: no map tiles yet (run tools/build_map.py)")
+        return None, None
     src = sqlite3.connect("file:%s?mode=ro" % path.replace("\\", "/"), uri=True)
     seen, places = set(), []
     count = 0
@@ -251,7 +440,11 @@ def build(log=print):
                 seen.add(key)
                 places.append([main, others, label, layer, weight, lat, lon, ""])
     src.close()
+    log("  place search: read %s map tiles" % format(count, ","))
+    return places, os.path.basename(path)
 
+
+def _write(places, source, started, log):
     # The nearest town or village, for the second line of each suggestion.
     towns = [p for p in places if p[3] == "place" and p[2] in ("City", "Town", "Village", "Area")]
     grid = {}
@@ -284,27 +477,44 @@ def build(log=print):
     db.executemany("INSERT INTO places (name, alt, kind, layer, weight, lat, lon, near) "
                    "VALUES (?,?,?,?,?,?,?,?)", places)
     db.execute("INSERT INTO search (rowid, name, alt, near) SELECT id, name, alt, near FROM places")
-    db.execute("INSERT INTO meta VALUES ('source', ?), ('built', ?)",
-               (os.path.basename(path), str(time.time())))
+    # Sound-alike keys, for other spellings of the same name.
+    db.execute("CREATE VIRTUAL TABLE sound USING fts5(key, tokenize='unicode61', prefix='2 3 4')")
+    db.executemany("INSERT INTO sound (rowid, key) VALUES (?, ?)",
+                   ((i, _sound_key(n, a)) for i, n, a in
+                    db.execute("SELECT id, name, alt FROM places").fetchall()))
+    db.execute("INSERT INTO meta VALUES ('source', ?), ('built', ?), ('version', ?)",
+               (source, str(time.time()), INDEX_VERSION))
     db.commit()
     db.close()
     os.replace(tmp, DB)
     with _lock:
         _building["state"] = "done"
-    log("  place search: indexed %s named places from %s map tiles in %.0f s"
-        % (format(len(places), ","), format(count, ","), time.time() - started))
+    log("  place search: indexed %s named places from %s in %.0f s"
+        % (format(len(places), ","), source, time.time() - started))
     return True
 
 
-def is_stale():
-    """True when there is no index, or the map tiles are newer than it."""
-    tiles = basemap.newest_build()
-    if tiles is None:
-        return False
+def _version():
     try:
-        return os.path.getmtime(DB) < os.path.getmtime(tiles)
-    except OSError:
+        db = sqlite3.connect("file:%s?mode=ro" % DB.replace("\\", "/"), uri=True)
+        try:
+            row = db.execute("SELECT value FROM meta WHERE key='version'").fetchone()
+        finally:
+            db.close()
+        return row[0] if row else None
+    except sqlite3.Error:
+        return None
+
+
+def is_stale():
+    """True when there is no index, it is of an older kind, or its source
+    (the OSM file or the map tiles) is newer than it."""
+    sources = [p for p in (PBF, basemap.newest_build()) if p and os.path.exists(p)]
+    if not sources:
+        return False
+    if not os.path.exists(DB) or _version() != INDEX_VERSION:
         return True
+    return os.path.getmtime(DB) < max(os.path.getmtime(p) for p in sources)
 
 
 # ----------------------------------------------------------------- search
@@ -315,25 +525,47 @@ def _query(text):
     return " AND ".join('"%s"*' % w for w in words) if words else None
 
 
+def _sound_query(text):
+    """'kuthiyathodu' -> '"kutiatod"*': the typed words as they sound."""
+    keys = [_sound(w) for w in re.findall(r"[A-Za-z]+", text)]
+    keys = [k for k in keys if len(k) >= 2]
+    return " AND ".join('"%s"*' % k for k in keys) if keys else None
+
+
 def search(text, near=None, limit=8):
     """Best matches for what the user has typed so far, nearest and most
-    useful first. `near` (lat, lon) is where the user is or is looking."""
+    useful first. `near` (lat, lon) is where the user is or is looking.
+    Exact spellings come first; other spellings of the same name follow."""
     q = _query(text)
     if not q or not os.path.exists(DB):
         return []
     db = sqlite3.connect("file:%s?mode=ro" % DB.replace("\\", "/"), uri=True)
+    rows = {}
     try:
-        rows = db.execute(
-            "SELECT p.name, p.kind, p.weight, p.lat, p.lon, p.near, bm25(search, 10.0, 2.0, 1.0) "
-            "FROM search JOIN places p ON p.id = search.rowid "
-            "WHERE search MATCH ? ORDER BY bm25(search, 10.0, 2.0, 1.0) LIMIT 400", (q,)).fetchall()
+        for row in db.execute(
+                "SELECT p.id, p.name, p.kind, p.weight, p.lat, p.lon, p.near, "
+                "bm25(search, 10.0, 2.0, 1.0) "
+                "FROM search JOIN places p ON p.id = search.rowid "
+                "WHERE search MATCH ? ORDER BY bm25(search, 10.0, 2.0, 1.0) LIMIT 400", (q,)):
+            rows[row[0]] = row[1:] + (True,)
+        sq = _sound_query(text)
+        if sq:
+            try:
+                for row in db.execute(
+                        "SELECT p.id, p.name, p.kind, p.weight, p.lat, p.lon, p.near, bm25(sound) "
+                        "FROM sound JOIN places p ON p.id = sound.rowid "
+                        "WHERE sound MATCH ? ORDER BY bm25(sound) LIMIT 400", (sq,)):
+                    rows.setdefault(row[0], row[1:] + (False,))
+            except sqlite3.OperationalError:
+                pass                                    # an index from before sound keys
     except sqlite3.OperationalError:
         return []
     finally:
         db.close()
     typed = " ".join(re.findall(r"\w+", text.lower()))
+    styped = _sound_key(text)
     scored = []
-    for name, kind, weight, lat, lon, place_near, rank in rows:
+    for name, kind, weight, lat, lon, place_near, rank, exact in rows.values():
         low = name.lower()
         score = weight * 2.0 - rank                      # bm25: lower is better
         if low == typed:
@@ -342,6 +574,16 @@ def search(text, near=None, limit=8):
             score += 14
         elif typed in low:
             score += 6
+        elif styped:
+            sname = _sound_key(name)
+            if sname == styped:
+                score += 16                              # same name, other spelling
+            elif sname.startswith(styped):
+                score += 11
+            elif styped in sname:
+                score += 4
+        if exact:
+            score += 3
         if near:
             # Nearby wins: the Lulu Mall in your city before the one 170 km away.
             km = haversine(near[0], near[1], lat, lon) / 1000.0

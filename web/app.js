@@ -256,7 +256,13 @@ function placeSearch(role, input, list) {
         if (ticket !== asked) return;          // an older answer arriving late
         show(d.results || [], "No place found - try another spelling, or tap the map.");
       })
-      .catch(function () { if (ticket === asked) show([], "Search failed - check the connection."); });
+      .catch(function () {
+        if (ticket !== asked) return;
+        show([], navigator.onLine === false
+          ? "You are offline - connect to the internet to search."
+          : "Can't reach Vazhi right now, so search isn't working. Try again in a minute.");
+        serverDown(true);
+      });
   }
   input.addEventListener("focus", function () {
     setActive(role);
@@ -759,6 +765,7 @@ PERMIT.init(function () { if (!sharedTrip) locateUser(); });
 function pollOffline() {
   fetch("/api/status").then(function (r) { return r.json(); }).then(function (s) {
     var p = s.preload || {}, box = el("offline");
+    serverDown(false);
     if (!p.region || p.state === "idle") { setTimeout(pollOffline, 3000); return; }
     if (p.state === "running") {
       box.textContent = "Getting " + p.region + " ready for fast trips (" +
@@ -769,9 +776,24 @@ function pollOffline() {
     } else {
       box.hidden = true;            // ready (or nothing to do): nothing to tell
     }
-  }).catch(function () { /* the server may be restarting; no status then */ });
+  }).catch(function () { serverDown(true); setTimeout(pollOffline, 10000); });
 }
 pollOffline();
+
+// Opened from the phone's saved copy while Vazhi's server is unreachable:
+// say so plainly at the top, instead of letting each search fail on its own.
+function serverDown(down) {
+  var note = el("offline-note");
+  if (navigator.onLine === false) return;      // install.js shows "You are offline"
+  if (down) {
+    note.textContent = "Can't reach Vazhi right now. Searching and planning will work again " +
+                       "once it is back - a trip alarm that is already on keeps working.";
+    note.hidden = false;
+  } else if (note.getAttribute("data-down") === "1") {
+    note.hidden = true;
+  }
+  note.setAttribute("data-down", down ? "1" : "0");
+}
 
 
 /* ------------------------------------------------------------- location */
