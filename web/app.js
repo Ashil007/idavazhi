@@ -110,6 +110,11 @@ function drawPoints() {
       .bindTooltip(role === "origin" ? "Start" : "Destination", { direction: "top", offset: [0, -8] });
     m.on("dragend", function (e) { setPoint(role, e.target.getLatLng()); });
   });
+  showDestClear();
+}
+
+function showDestClear() {
+  el("dest-clear").hidden = !state.destination && !el("dest-input").value;
 }
 
 function setActive(role) {
@@ -554,27 +559,48 @@ el("trip-head-edit").addEventListener("click", function () {
   SHEET.set("half");
 });
 
-el("clear").addEventListener("click", function () {
+// Takes the planned trip (or the one being planned) off the screen.
+function dropTrip() {
   if (state.source) state.source.close();
   state.planning = false;
-  state.origin = state.destination = null;
   state.options = null;
   ALERTS.stop();
   el("trip").hidden = true;
   el("plan").disabled = false;
   el("plan").textContent = "Plan journey";
-  ["origin", "destination"].forEach(function (r) {
-    el(r === "origin" ? "origin-input" : "dest-input").value = "";
-  });
   routeLayer.clearLayers();
-  pointLayer.clearLayers();
   el("result-block").hidden = true;
   el("status-block").hidden = true;
   el("legend").hidden = true;
   document.querySelector(".panel").classList.remove("has-result");
   DRAWER.close();
+}
+
+el("clear").addEventListener("click", function () {
+  dropTrip();
+  state.origin = state.destination = null;
+  el("origin-input").value = el("dest-input").value = "";
+  drawPoints();
   setActive("origin");
 });
+
+// The cross by the destination: picked the wrong place? Remove it and
+// choose again. The start stays.
+function clearDestination() {
+  if (ALERTS.isRunning() &&
+      !window.confirm("Your stop alarm is on. Remove the destination and stop the alarm?")) return;
+  dropTrip();
+  state.destination = null;
+  el("dest-input").value = "";
+  drawPoints();
+  setActive("destination");
+  document.querySelector(".panel").scrollTop = 0;
+  SHEET.set("half");
+  el("dest-input").focus();
+}
+el("dest-clear").addEventListener("click", function (e) { e.stopPropagation(); clearDestination(); });
+el("trip-head-clear").addEventListener("click", clearDestination);
+el("dest-input").addEventListener("input", showDestClear);
 
 /* -------------------------------------------------------------- results */
 

@@ -94,6 +94,9 @@
                  placeholder="Where to? Search a place" aria-label="Destination"
                  aria-autocomplete="list" aria-controls="dest-suggest" />
         </div>
+        <button type="button" class="point__clear" id="dest-clear" hidden
+                aria-label="Remove the destination and choose another"
+                title="Remove the destination"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <ul class="suggest" id="dest-suggest" role="listbox" hidden></ul>
       <p class="hint" id="hint">Clicking the map sets the highlighted point.</p>
@@ -115,6 +118,9 @@
       <div class="trip-head" id="trip-head">
         <div class="trip-head__where"><b id="trip-head-from"></b> &rarr; <b id="trip-head-to"></b>
           <span id="trip-head-mode"></span></div>
+        <button type="button" class="point__clear" id="trip-head-clear"
+                aria-label="Remove the destination and choose another"
+                title="Remove the destination"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <button type="button" class="mini" id="trip-head-edit">Change</button>
       </div>
       <div class="options" id="options" hidden></div>
