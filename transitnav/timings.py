@@ -24,7 +24,8 @@ import re
 import sqlite3
 import threading
 import time
-from collections import defaultdict, deque
+
+from . import limits
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(ROOT, "data", "timings.db")
@@ -38,12 +39,8 @@ OPERATORS = {"ksrtc": "KSRTC", "private": "Private bus", "kurtc": "KURTC (city A
              "swift": "KSRTC Swift", "other": "Other"}
 DAYS = {"daily": "Every day", "not_sunday": "Not on Sundays", "sunday": "Sundays only"}
 
-# Abuse limits, per client address, kept in memory only.
-LIMITS = {"report": (20, 3600), "vote": (120, 3600),
-          "stop": (30, 3600), "stopvote": (200, 3600)}   # stopnames.py
-
+# Abuse limits, per client address, kept in memory only: see limits.py.
 _lock = threading.Lock()
-_hits: dict = defaultdict(deque)
 
 
 class TimingError(ValueError):
@@ -99,15 +96,10 @@ def _device(raw):
 
 
 def _rate(kind, client):
-    limit, window = LIMITS[kind]
-    now = time.monotonic()
-    with _lock:
-        q = _hits[(kind, client)]
-        while q and now - q[0] > window:
-            q.popleft()
-        if len(q) >= limit:
-            raise TimingError("That is a lot in a short time - please try again in a while.")
-        q.append(now)
+    try:
+        limits.hit(kind, client)
+    except limits.Limited:
+        raise TimingError("That is a lot in a short time - please try again in a while.") from None
 
 
 def _place(p, what):

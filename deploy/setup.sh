@@ -24,6 +24,7 @@ USER_NAME=vazhi
 ENV=/opt/vazhi-env      # Python with pyosmium (Ubuntu's own is too old)
 PY=$ENV/bin/python3
 PORT=8001
+WORKER_BASE=8010        # extra copies listen on 8011, 8012, ... (vazhi-worker@8011)
 
 log() { printf '\n==> %s\n' "$*"; }
 
@@ -50,7 +51,7 @@ log "Installing Python, Docker and Caddy"
 apt-get update -q
 pkgs="python3 python3-venv python3-shapely python3-pil curl ca-certificates"
 [ -n "${SKIP_DOCKER:-}" ] || pkgs="$pkgs docker.io"
-[ -n "${SKIP_SYSTEM:-}" ] || pkgs="$pkgs caddy iptables-persistent"
+[ -n "${SKIP_SYSTEM:-}" ] || pkgs="$pkgs caddy iptables-persistent unattended-upgrades"
 # shellcheck disable=SC2086
 apt-get install -y -q $pkgs
 
@@ -98,19 +99,53 @@ fi
 
 # 6. Service and web server -----------------------------------------------------
 log "Setting up the Vazhi service"
+# One copy of the app per processor core (2 to 4): Python does its work on
+# one core per process, so more copies answer more people at once. The main
+# copy (port 8001) also downloads map data and builds the place index; the
+# others only answer requests.
+WORKERS=$(nproc)
+[ "$WORKERS" -lt 2 ] && WORKERS=2
+[ "$WORKERS" -gt 4 ] && WORKERS=4
+unit_body() {
+  cat <<EOF
+User=$USER_NAME
+WorkingDirectory=$APP
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+# Kerala time for dates and logs (the server's clock runs on UTC).
+Environment=TZ=Asia/Kolkata
+Environment=VAZHI_MAX_PLANS=2
+# Limits: no new privileges, read-only system, writes only to the app's folder.
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=$APP
+MemoryMax=4G
+EOF
+}
 cat > /etc/systemd/system/vazhi.service <<EOF
 [Unit]
-Description=Vazhi journey planner
+Description=Vazhi journey planner (main)
 After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
-User=$USER_NAME
-WorkingDirectory=$APP
 ExecStart=$PY serve.py --host 127.0.0.1 --port $PORT --no-browser
-Restart=always
-RestartSec=5
-Environment=PYTHONUNBUFFERED=1
+$(unit_body)
+
+[Install]
+WantedBy=multi-user.target
+EOF
+cat > /etc/systemd/system/vazhi-worker@.service <<EOF
+[Unit]
+Description=Vazhi journey planner (extra copy on port %i)
+After=vazhi.service
+
+[Service]
+ExecStart=$PY serve.py --host 127.0.0.1 --port %i --no-browser --worker
+$(unit_body)
 
 [Install]
 WantedBy=multi-user.target
@@ -118,14 +153,45 @@ EOF
 systemctl daemon-reload
 systemctl enable vazhi >/dev/null
 systemctl restart vazhi
+UPSTREAMS="127.0.0.1:$PORT"
+# Stop extra copies left from a bigger machine, then start this one's.
+for unit in $(systemctl list-units --all --plain --no-legend 'vazhi-worker@*' | awk '{print $1}'); do
+  systemctl disable --now "$unit" >/dev/null 2>&1 || true
+done
+for n in $(seq 1 $((WORKERS - 1))); do
+  port=$((WORKER_BASE + n))
+  systemctl enable "vazhi-worker@$port" >/dev/null
+  systemctl restart "vazhi-worker@$port"
+  UPSTREAMS="$UPSTREAMS 127.0.0.1:$port"
+done
 
 log "Setting up HTTPS for $DOMAIN"
 cat > /etc/caddy/Caddyfile <<EOF
 $DOMAIN {
 	encode gzip
-	reverse_proxy 127.0.0.1:$PORT {
+	# HTTPS only, from now on, for this site (the browser remembers).
+	header Strict-Transport-Security "max-age=31536000"
+	header -Server
+	# Nothing Vazhi accepts is anywhere near this big.
+	@big header_regexp Content-Length ^[0-9]{6,}$
+	respond @big "Request too large" 413
+	request_body {
+		max_size 64KB
+	}
+	reverse_proxy $UPSTREAMS {
+		# Each visitor to the copy with the fewest open requests; a copy
+		# that stops answering is skipped until it is healthy again.
+		lb_policy least_conn
+		health_uri /api/health
+		health_interval 15s
+		fail_duration 30s
 		# Plans stream their progress; pass it on as it comes.
 		flush_interval -1
+		# A fresh local connection per request: the app's simple server does not
+		# cope with connections being reused (error answers went missing).
+		transport http {
+			keepalive off
+		}
 	}
 }
 EOF
@@ -136,8 +202,27 @@ for _ in $(seq 1 30); do
   curl -fsS -o /dev/null "http://127.0.0.1:$PORT/" && break
   sleep 2
 done
-log "Vazhi is up: https://$DOMAIN/app"
+log "Vazhi is up ($WORKERS copies): https://$DOMAIN/app"
 echo "(The HTTPS certificate can take a minute on the very first visit.)"
+
+# Backups: riders' data (bus times, stop names) every night at 3:30, the
+# last 14 days kept in /var/backups/vazhi.
+log "Setting up nightly backups"
+mkdir -p /var/backups/vazhi
+chmod 700 /var/backups/vazhi
+cat > /usr/local/bin/vazhi-backup <<EOF
+#!/bin/sh
+set -e
+umask 077                     # riders' data: readable by root only
+day=\$(date +%Y-%m-%d)
+for db in $APP/data/*.db; do
+  [ -f "\$db" ] || continue
+  $PY -c 'import sqlite3, sys; d = sqlite3.connect(sys.argv[2]); sqlite3.connect(sys.argv[1]).backup(d); d.close()' "\$db" "/var/backups/vazhi/\$(basename "\$db" .db)-\$day.db"
+done
+find /var/backups/vazhi -name '*.db' -mtime +14 -delete
+EOF
+chmod 755 /usr/local/bin/vazhi-backup
+echo "30 3 * * * root TZ=Asia/Kolkata /usr/local/bin/vazhi-backup" > /etc/cron.d/vazhi-backup
 
 # 7. Route service --------------------------------------------------------------
 # Last, because its first build is the slow part; the app already works and
@@ -145,7 +230,7 @@ echo "(The HTTPS certificate can take a minute on the very first visit.)"
 if [ -z "${SKIP_DOCKER:-}" ]; then
   log "Starting the route service (the first build takes 10-30 minutes)"
   if (cd "$APP" && "$PY" tools/routing_server.py start); then
-    systemctl restart vazhi
+    systemctl restart vazhi 'vazhi-worker@*' 
     log "All done: https://$DOMAIN/app"
   else
     echo "The route service is still building in Docker; it is picked up by itself."

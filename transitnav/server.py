@@ -13,17 +13,53 @@ import mimetypes
 import os
 import posixpath
 import threading
+import time
 import traceback
 import urllib.parse
+from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import basemap, locate, overpass, places, preload, stopnames, timings
+from . import basemap, limits, locate, overpass, places, preload, router, stopnames, timings
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
 GZIP_MIN = 64 * 1024
+# Largest JSON body accepted (riders' reports, the scripted /api/plan).
+MAX_BODY = 4096
+MAX_QUERY = 120          # characters in a place search
+
+# Sent with every response. The policy allows only Vazhi's own scripts (the
+# map libraries are in web/vendor), Google's web fonts, and the blob: worker
+# the map draws with; nothing may frame the app (clickjacking).
+CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "connect-src 'self'",
+    "worker-src 'self' blob:",
+    "child-src blob:",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+SECURITY_HEADERS = {
+    "Content-Security-Policy": CSP,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(self), camera=(), microphone=(), payment=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+OOPS = "Something went wrong on our side. Please try again."
 mimetypes.add_type("application/geo+json", ".geojson")
 _gz_cache = {}          # path -> (mtime, gzipped bytes)
+_search_cache = {}      # (query, full, near) -> (time, answer)
+SEARCH_CACHE_S = 600
+SEARCH_CACHE_MAX = 3000
 _gz_lock = threading.Lock()
 
 
@@ -59,6 +95,8 @@ def _prefetch(point, mode):
         prefetch(point, mode)
     except Exception:  # noqa: BLE001
         pass
+    finally:
+        limits.prefetch_slots.release()
 
 
 def _point(lat, lon):
@@ -75,6 +113,20 @@ def _point(lat, lon):
     return lat, lon
 
 
+def _log_plan(mode, access, outcome, started):
+    """One line per trip plan: what kind, how it ended, how long it took
+    (never where from or to)."""
+    print("%s plan %s/%s %s %.1fs" % (time.strftime("%Y-%m-%d %H:%M:%S"), mode, access,
+                                       outcome, time.time() - started), flush=True)
+
+
+def _check_modes(mode, access):
+    if mode not in MODES:
+        raise PlanError("Unknown travel mode.")
+    if access not in ACCESS_MODES:
+        raise PlanError("Unknown way of reaching the stop.")
+
+
 def _coord(params, lat_key, lon_key):
     try:
         return _point(params[lat_key][0], params[lon_key][0])
@@ -83,30 +135,86 @@ def _coord(params, lat_key, lon_key):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "TransitNav/1.0"
+    server_version = "Vazhi"
+    sys_version = ""                 # do not advertise the Python version
     protocol_version = "HTTP/1.1"
+    timeout = 60                     # a silent connection is dropped after a minute
 
     # Set once a response has begun, so error handling never tries to write a
     # second set of headers down a stream that is already open (or gone).
     started = False
 
-    # Quieter logs: one line per API call, nothing for static assets.
+    # Logs: one line per trip plan, contribution or failed request - not per
+    # search keystroke, map tile or file, which under load cost more to print
+    # than to answer. No addresses or coordinates are logged.
+    LOGGED = ("/api/plan", "/api/timings", "/api/stops/rename", "/api/stops/add",
+              "/api/stops/answer")
+
+    def log_request(self, code="-", size="-"):
+        path = (self.path or "").split("?")[0]
+        try:
+            failed = int(code) >= 400
+        except (TypeError, ValueError):
+            failed = False
+        if failed or (path in self.LOGGED and self.command == "POST"):
+            print("%s %s %s %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), self.command, path, code),
+                  flush=True)
+
     def log_message(self, fmt, *args):
-        if "/api/" in (self.path or ""):
-            print("  %s %s" % (self.command, self.path.split("?")[0]))
+        print("%s %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), fmt % args), flush=True)
 
     # ------------------------------------------------------------- plumbing
 
-    def _send(self, code, body: bytes, ctype: str, extra=None):
+    def end_headers(self):
+        for k, v in SECURITY_HEADERS.items():
+            self.send_header(k, v)
+        super().end_headers()
+
+    def _send(self, code, body: bytes, ctype: str, extra=None, cache="no-store"):
         self.started = True
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def _limit(self, kind):
+        """Count this request against the visitor's limit; False (after
+        answering 429) when they are over it."""
+        try:
+            limits.hit(kind, self._client())
+            return True
+        except limits.Limited as exc:
+            self._send(429, json.dumps({"error": str(exc)}).encode("utf-8"),
+                       "application/json; charset=utf-8",
+                       {"Retry-After": str(exc.retry_after)})
+            return False
+
+    def _same_site(self):
+        """A post must come from Vazhi's own pages: JSON (which a form on
+        another site cannot send without the browser asking first), and, when
+        the browser names the page it came from, this site (CSRF)."""
+        if "application/json" not in (self.headers.get("Content-Type") or ""):
+            return False
+        origin = self.headers.get("Origin")
+        if not origin:
+            return True        # scripts and curl; browsers send Origin with every post
+        host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or ""
+        return urllib.parse.urlparse(origin).netloc == host
+
+    def _body(self):
+        """The request's JSON object, at most MAX_BODY bytes; ValueError if not."""
+        length = int(self.headers.get("Content-Length") or 0)
+        if length < 0 or length > MAX_BODY:
+            raise ValueError("too large")
+        body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+        if not isinstance(body, dict):
+            raise ValueError("not an object")
+        return body
 
     def _json(self, code, payload):
         self._send(code, json.dumps(payload).encode("utf-8"), "application/json; charset=utf-8")
@@ -134,15 +242,30 @@ class Handler(BaseHTTPRequestHandler):
         ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
         if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
             ctype += "; charset=utf-8"
+        # Files keep their names between versions, so browsers keep them but
+        # check back each time; an unchanged file costs a tiny 304 answer.
+        mtime = int(os.path.getmtime(full))
+        since = self.headers.get("If-Modified-Since")
+        if since:
+            try:
+                if int(parsedate_to_datetime(since).timestamp()) >= mtime:
+                    self.started = True
+                    self.send_response(304)
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Last-Modified", formatdate(mtime, usegmt=True))
+                    self.end_headers()
+                    return
+            except (TypeError, ValueError, OverflowError):
+                pass
         with open(full, "rb") as fh:
             body = fh.read()
-        extra = None
+        extra = {"Last-Modified": formatdate(mtime, usegmt=True)}
         # Big map data (the 1.8 MB stop list) goes over the phone's data
         # connection gzipped: about an eighth of the size.
         if len(body) > GZIP_MIN and "gzip" in (self.headers.get("Accept-Encoding") or "")                 and (ctype.startswith("text/") or "json" in ctype or rel.endswith(".geojson")):
             body = _gzipped(full, body)
-            extra = {"Content-Encoding": "gzip", "Vary": "Accept-Encoding"}
-        self._send(200, body, ctype, extra)
+            extra.update({"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+        self._send(200, body, ctype, extra, cache="no-cache")
 
     def _search(self, params):
         """Places for the destination box, as the user types.
@@ -151,7 +274,7 @@ class Handler(BaseHTTPRequestHandler):
         once. The online search (Nominatim) is asked only when the local
         one finds little - a place outside Kerala, or before the index is
         built - or when the user presses Enter (`full=1`)."""
-        q = (params.get("q") or [""])[0].strip()
+        q = (params.get("q") or [""])[0].strip()[:MAX_QUERY]
         if len(q) < 2:
             self._json(200, {"results": []})
             return
@@ -162,8 +285,16 @@ class Handler(BaseHTTPRequestHandler):
                 near = None
         except (KeyError, IndexError, ValueError):
             near = None
+        full = (params.get("full") or ["0"])[0] == "1"
+        # Many riders type the same first letters near the same places: keep
+        # recent answers (keyed to about a kilometre) for ten minutes.
+        key = (q.lower(), full, near and (round(near[0], 2), round(near[1], 2)))
+        hit = _search_cache.get(key)
+        if hit and time.time() - hit[0] < SEARCH_CACHE_S:
+            self._json(200, hit[1])
+            return
         results = places.search(q, near=near, limit=8)
-        if len(results) < 3 or (params.get("full") or ["0"])[0] == "1":
+        if len(results) < 3 or full:
             try:
                 online = overpass.geocode(places.clean_query(q)[0] or q, limit=6, near=near)
             except Exception:  # noqa: BLE001 - offline: the local results stand
@@ -174,7 +305,12 @@ class Handler(BaseHTTPRequestHandler):
                            and abs(r["lat"] - l["lat"]) < 0.01 and abs(r["lon"] - l["lon"]) < 0.01
                            for l in results):
                     results.append(r)
-        self._json(200, {"results": results[:10]})
+        answer = {"results": results[:10]}
+        with _gz_lock:
+            if len(_search_cache) >= SEARCH_CACHE_MAX:
+                _search_cache.pop(next(iter(_search_cache)))
+            _search_cache[key] = (time.time(), answer)
+        self._json(200, answer)
 
     def _tile(self, route):
         """/tiles/{z}/{x}/{y}.pbf from the local map (see basemap.py)."""
@@ -213,9 +349,15 @@ class Handler(BaseHTTPRequestHandler):
                     "access": [{"id": k, "label": v["label"], "speed_kmh": v["speed_kmh"]}
                                for k, v in ACCESS_MODES.items()]})
             elif route == "/api/search":
-                self._search(params)
+                if self._limit("search"):
+                    self._search(params)
             elif route == "/api/plan":
                 self._plan_stream(params)
+            elif route == "/api/health":
+                # For uptime monitors: is the app answering, and are its parts there?
+                self._json(200, {"ok": True, "map": basemap.newest_build() is not None,
+                                 "route_service": router.local_available(),
+                                 "time": int(time.time())})
             elif route == "/api/mapinfo":
                 self._json(200, basemap.info())
             elif route.startswith("/tiles/"):
@@ -239,7 +381,7 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/api/timings":
                 board = _coord(params, "blat", "blon")
                 alight = _coord(params, "alat", "alon")
-                device = (params.get("device") or [""])[0]
+                device = (params.get("device") or [""])[0][:64]
                 self._json(200, {"times": timings.near(board, alight, device)})
             elif route == "/api/stops/ask":
                 # Questions for this rider about the stops of their trip.
@@ -250,14 +392,19 @@ class Handler(BaseHTTPRequestHandler):
                         points.append(_point(*pair.split(",")))
                     except (PlanError, TypeError):
                         pass
-                device = (params.get("device") or [""])[0]
+                device = (params.get("device") or [""])[0][:64]
+                keys = [k[:80] for k in keys]
                 self._json(200, {"questions": stopnames.ask(keys, points, device)})
             elif route == "/api/prefetch":
+                if not self._limit("prefetch"):
+                    return
                 point = _coord(params, "lat", "lon")
                 mode = (params.get("mode") or ["bus"])[0]
                 if mode not in MODES:
                     raise PlanError("Unknown mode.")
-                threading.Thread(target=_prefetch, args=(point, mode), daemon=True).start()
+                # A nicety: when enough already run, this one is skipped.
+                if limits.prefetch_slots.acquire(blocking=False):
+                    threading.Thread(target=_prefetch, args=(point, mode), daemon=True).start()
                 self._json(202, {"ok": True})
             elif route == "/" and ("from" in params or "to" in params):
                 # A trip shared before the app moved to /app.
@@ -275,10 +422,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"error": str(exc)})
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             self.close_connection = True   # the client went away; nothing to report
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - details go to the log, not the visitor
             traceback.print_exc()
             if not self.started:
-                self._json(500, {"error": "%s: %s" % (type(exc).__name__, exc)})
+                self._json(500, {"error": OOPS})
 
     def _plan_stream(self, params):
         """Plan a journey, streaming progress as Server-Sent Events.
@@ -290,6 +437,7 @@ class Handler(BaseHTTPRequestHandler):
         destination = _coord(params, "dlat", "dlon")
         mode = (params.get("mode") or ["bus"])[0]
         access = (params.get("access") or ["walk"])[0]
+        _check_modes(mode, access)
 
         self.started = True
         self.send_response(200)
@@ -310,24 +458,43 @@ class Handler(BaseHTTPRequestHandler):
         def report(stage, message):
             emit("progress", {"stage": stage, "message": message})
 
+        started = time.time()
+
         # A browser that leaves mid-plan surfaces as ClientGone from whichever
         # emit() notices first - including the one reporting an error - so it
         # is caught once, around everything, and never logged as a crash.
         try:
             try:
                 emit("progress", {"stage": "start", "message": "Planning your journey"})
-                result = plan(origin, destination, mode, report, access)
+                try:
+                    limits.hit("plan", self._client())
+                except limits.Limited:
+                    raise PlanError("That is a lot of trips in a few minutes. Please wait a "
+                                    "little and try again.", title="Too many trips at once") from None
+                if not limits.plan_slots.acquire(timeout=0.05):
+                    report("start", "Many trips are being planned right now - yours is next")
+                    if not limits.plan_slots.acquire(timeout=limits.PLAN_WAIT_S):
+                        raise PlanError("Vazhi is very busy right now. Please try again in a "
+                                        "minute.", title="Vazhi is busy")
+                try:
+                    result = plan(origin, destination, mode, report, access)
+                finally:
+                    limits.plan_slots.release()
+                _log_plan(mode, access, "ok", started)
                 emit("result", result)
             except (PlanError, overpass.OverpassError) as exc:
+                _log_plan(mode, access, "refused (%s)" % (getattr(exc, "title", None) or "no route"),
+                          started)
                 emit("error", {"error": str(exc), "title": getattr(exc, "title", None),
                                "actions": getattr(exc, "actions", [])})
             except ClientGone:
                 raise
-            except Exception as exc:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - details go to the log, not the visitor
                 traceback.print_exc()
-                emit("error", {"error": "Unexpected failure: %s: %s" % (type(exc).__name__, exc)})
+                _log_plan(mode, access, "FAILED", started)
+                emit("error", {"error": OOPS})
         except ClientGone:
-            print("  client left before the plan finished")
+            _log_plan(mode, access, "left early", started)
 
     def _client(self):
         """Who is asking, for rate limits only (never stored). Through the
@@ -347,12 +514,7 @@ class Handler(BaseHTTPRequestHandler):
         """Riders' contributions: bus times (timings.py), and stop names and
         missing stops (stopnames.py)."""
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-            if length > 4096:
-                raise timings.TimingError("That request is too large.")
-            body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-            if not isinstance(body, dict):
-                raise timings.TimingError("Malformed request.")
+            body = self._body()
             client = self._client()
             if route == "/api/timings":
                 self._json(200, {"ok": True, "id": timings.add(body, client)})
@@ -371,13 +533,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
         except (ValueError, UnicodeDecodeError):
             self._json(400, {"error": "Malformed request."})
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             traceback.print_exc()
-            self._json(500, {"error": "%s: %s" % (type(exc).__name__, exc)})
+            self._json(500, {"error": OOPS})
 
     def do_POST(self):
         """Riders' bus times, and a non-streaming /api/plan for scripts and curl."""
         parsed = urllib.parse.urlparse(self.path)
+        if not self._same_site():
+            self._json(403, {"error": "Requests must be JSON from Vazhi's own pages."})
+            return
         if parsed.path in ("/api/timings", "/api/timings/vote", "/api/stops/rename",
                            "/api/stops/add", "/api/stops/answer"):
             self._timings_post(parsed.path)
@@ -385,13 +550,15 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path != "/api/plan":
             self._send(404, b"Not found", "text/plain; charset=utf-8")
             return
+        if not self._limit("plan"):
+            return
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-            body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            body = self._body()
             origin = _point(body["origin"]["lat"], body["origin"]["lon"])
             destination = _point(body["destination"]["lat"], body["destination"]["lon"])
             mode = body.get("mode", "bus")
             access = body.get("access", "walk")
+            _check_modes(mode, access)
         except PlanError as exc:
             self._json(400, {"error": str(exc)})
             return
@@ -399,17 +566,32 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": "Body must be {origin:{lat,lon}, destination:{lat,lon}, "
                                       "mode, access?}"})
             return
+        if not limits.plan_slots.acquire(timeout=limits.PLAN_WAIT_S):
+            self._json(503, {"error": "Vazhi is very busy right now. Please try again in a minute."})
+            return
         try:
             self._json(200, plan(origin, destination, mode, access=access))
         except (PlanError, overpass.OverpassError) as exc:
             self._json(400, {"error": str(exc)})
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             traceback.print_exc()
-            self._json(500, {"error": str(exc)})
+            self._json(500, {"error": OOPS})
+        finally:
+            limits.plan_slots.release()
+
+    def do_HEAD(self):
+        """Uptime monitors often check with HEAD; answer as GET, without a body."""
+        self.do_GET()
+
+
+class Server(ThreadingHTTPServer):
+    # Connections waiting to be accepted. Python's default of 5 refuses
+    # visitors as soon as a few dozen arrive at once.
+    request_queue_size = 256
 
 
 def serve(host: str = "127.0.0.1", port: int = 8000) -> ThreadingHTTPServer:
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    httpd = Server((host, port), Handler)
     httpd.daemon_threads = True
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()

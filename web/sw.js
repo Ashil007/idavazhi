@@ -10,18 +10,17 @@
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v27";
+var CACHE = "vazhi-shell-v28";
 var SHELL = [
   "/", "/app", "home.css", "home.js", "style.css", "manifest.webmanifest",
   "basemap.js", "sheet.js", "drawer.js", "alerts.js", "times.js", "stops.js", "install.js", "permit.js", "notice.js", "app.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/favicon-32.png",
   // The sea and the basic letters of the map; map tiles stay online-only.
   "map/sea.geojson", "map/region.geojson", "fonts/Noto%20Sans%20Regular/0-255.pbf", "fonts/Noto%20Sans%20Medium/0-255.pbf",
-  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
-  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
-  "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css",
-  "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js",
-  "https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"
+  // The map libraries, served by Vazhi itself (web/vendor).
+  "vendor/leaflet/leaflet.css", "vendor/leaflet/leaflet.js",
+  "vendor/maplibre/maplibre-gl.css", "vendor/maplibre/maplibre-gl.js",
+  "vendor/maplibre/leaflet-maplibre-gl.js"
 ];
 
 self.addEventListener("install", function (event) {
@@ -44,7 +43,7 @@ function isShell(url) {
   if (url.origin === self.location.origin) {
     return !/^\/(api|tiles)\//.test(url.pathname);
   }
-  return url.hostname === "unpkg.com";
+  return false;
 }
 
 self.addEventListener("fetch", function (event) {

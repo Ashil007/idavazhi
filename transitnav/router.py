@@ -66,6 +66,23 @@ class _NoRoute(Exception):
     """The server answered, but there is no path (not a server failure)."""
 
 
+_local_seen = {"at": 0.0, "up": False}
+
+
+def local_available() -> bool:
+    """Is the app's own route service answering? Checked at most every 30 s
+    (for the health check)."""
+    now = time.time()
+    if now - _local_seen["at"] > 30:
+        try:
+            with urllib.request.urlopen(LOCAL_VALHALLA + "/status", timeout=1) as r:
+                up = r.status == 200
+        except Exception:  # noqa: BLE001
+            up = False
+        _local_seen.update(at=now, up=up)
+    return _local_seen["up"]
+
+
 def _usable(backend: str) -> bool:
     with _state_lock:
         return time.time() >= _down_until[backend]

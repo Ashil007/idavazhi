@@ -841,5 +841,7 @@ def geocode(text: str, limit: int = 6, near=None):
         kind = (r.get("type") or r.get("category") or "place").replace("_", " ").capitalize()
         out.append({"name": name, "detail": kind + (" \u00b7 " + rest if rest else ""),
                     "lat": float(r["lat"]), "lon": float(r["lon"]), "source": "online"})
+    if len(_geocode_cache) >= 2000:       # every search typed is a new key: keep it bounded
+        _geocode_cache.pop(next(iter(_geocode_cache)))
     _geocode_cache[key] = out
     return out

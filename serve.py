@@ -2,6 +2,7 @@
 [--region kerala | --region south,west,north,east | --no-preload]."""
 
 import argparse
+import signal
 import sys
 import threading
 import time
@@ -21,6 +22,10 @@ def main() -> int:
                          "mumbai, delhi, kolkata) or south,west,north,east. Default: kerala")
     ap.add_argument("--no-preload", action="store_true",
                     help="download map data only when a trip needs it")
+    ap.add_argument("--worker", action="store_true",
+                    help="an extra copy of the app beside the main one (the cloud server "
+                         "runs one per processor core): it only answers requests and "
+                         "leaves downloading and index building to the main copy")
     args = ap.parse_args()
 
     from transitnav import preload
@@ -45,29 +50,37 @@ def main() -> int:
         res = overpass.probe_mirrors()
         up = [u.split("//")[1].split("/")[0] for u, v in res.items() if v is not None]
         print("Overpass mirrors reachable: " + (", ".join(up) or "none - check your connection"))
-    threading.Thread(target=probe, daemon=True).start()
+    if not args.worker:
+        threading.Thread(target=probe, daemon=True).start()
 
     # Download the region's stations and track once, in the background; trips
     # there then plan from disk. Already-fresh data is skipped instantly.
-    if not args.no_preload:
+    if not args.no_preload and not args.worker:
         preload.start_background(region)
 
     # The place-name index for the destination search, rebuilt whenever the
     # map tiles are newer than it (about a minute, in the background).
-    from transitnav import places
-    places.build_in_background(log=lambda m: print(m, flush=True))
+    if not args.worker:
+        from transitnav import places
+        places.build_in_background(log=lambda m: print(m, flush=True))
 
     url = "http://%s:%d/" % (args.host, args.port)
     print("Vazhi is running at " + url)
     print("Map data (c) OpenStreetMap contributors. Press Ctrl+C to stop.")
     if not args.no_browser:
         webbrowser.open(url)
+    # The cloud server's service manager stops the app with SIGTERM: treat it
+    # like Ctrl+C, so it stops taking requests and closes cleanly.
+    def stop(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, stop)
     try:
         while True:
             time.sleep(0.5)
     except KeyboardInterrupt:
         print("\nShutting down.")
         httpd.shutdown()
+        httpd.server_close()
     return 0
 
 
