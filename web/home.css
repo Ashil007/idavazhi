@@ -390,25 +390,27 @@ p { margin: 0; }
 
 /* ------------------------------------------------------------ the full guide */
 .guide__layout { display: grid; gap: 40px; margin-top: 48px; }
-.guide__layout > * { min-width: 0; }   /* the topic row scrolls instead of widening the page */
+.guide__layout > * { min-width: 0; }
+/* Every topic in view at once: a list on phones (two columns when there is
+   room), a sticky column beside the guide on wide screens. */
 .guide__toc ol {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-  margin-right: -16px; padding-right: 16px;          /* run to the screen edge on phones */
+  list-style: none; margin: 0; padding: 8px;
+  display: grid; grid-template-columns: 1fr; gap: 2px;
+  background: var(--panel); border-radius: 18px;
 }
-.guide__toc ol::-webkit-scrollbar { display: none; }
+@media (min-width: 600px) { .guide__toc ol { grid-template-columns: 1fr 1fr; } }
 .guide__toc a {
-  display: flex; align-items: center; gap: 8px; white-space: nowrap;
-  padding: 8px 14px; border-radius: 999px; background: var(--panel);
-  color: var(--ink-dim); font-size: 16px; font-weight: 600; text-decoration: none;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 12px;
+  color: var(--ink-dim); font-size: 16px; font-weight: 600; line-height: 1.35; text-decoration: none;
 }
-.guide__toc a span { color: var(--alarm); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.guide__toc a span { flex: none; min-width: 22px; color: var(--alarm); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .guide__toc a:hover, .guide__toc a.is-here { color: var(--ink); background: var(--panel-2); }
 @media (min-width: 1040px) {
   .guide__layout { grid-template-columns: 260px 1fr; gap: 64px; align-items: start; }
   .guide__toc { position: sticky; top: 100px; }
-  .guide__toc ol { display: block; overflow: visible; margin: 0; padding: 0; }
-  .guide__toc a { background: none; padding: 8px 12px; border-radius: 10px; white-space: normal; }
+  .guide__toc ol { display: block; padding: 0; background: none; }
+  .guide__toc a { padding: 8px 12px; border-radius: 10px; }
 }
 
 .chapter { scroll-margin-top: 96px; }

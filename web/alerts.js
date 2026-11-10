@@ -18,7 +18,7 @@ var ALERTS = (function () {
   var WAKE_M = 2000;        // "auto" (Default): wake the rider this far before the stop
   var SETTING = "vazhi.alarmDistance";   // the rider's own choice, kept on this device
   var ARRIVE_M = 150;       // "this is your stop"
-  var SIM_SECONDS = 70;     // demo: the whole trip in about this long
+  var SIM_SECONDS = 10;     // demo: the whole trip in about this long
 
   var plan = null, targets = [], fired = {};
   var watchId = null, simTimer = null, running = false, simulating = false;
@@ -374,18 +374,26 @@ var ALERTS = (function () {
       seg.push(d);
       total += d;
     }
-    var tick = 400, step = total / (SIM_SECONDS * 1000 / tick), idx = 0, into = 0;
+    var tick = 100, step = total / (SIM_SECONDS * 1000 / tick), idx = 0, into = 0;
     // The pretend clock runs as much faster as the ride is compressed, so the
     // speed worked out from it matches the real trip.
     var scale = Math.max(1, (plan.summary.duration_s || SIM_SECONDS) / SIM_SECONDS);
     var clock = Date.now();
     simTimer = setInterval(function () {
-      var move = step;
+      // A 10-second ride covers hundreds of metres a tick, which could jump
+      // straight past the alarm distance. Near each stop it slows down, so
+      // the wake-up alarm always rings before "this is your stop".
+      var move = step, t = targets[nextTarget()];
+      if (t && last) {
+        var wake = wakeDistance(), cap = Math.max(50, (wake - ARRIVE_M) / 3);
+        if (distanceLeft(last.at, t) < wake + 2 * cap) move = Math.min(move, cap);
+      }
+      var moved = move;
       while (move > 0 && idx < seg.length) {
         var left = seg[idx] - into;
         if (move < left) { into += move; move = 0; } else { move -= left; idx += 1; into = 0; }
       }
-      clock += tick * scale;
+      clock += tick * scale * (moved / step);   // the pretend speed stays the trip's
       if (idx >= seg.length) {
         onFix(path[path.length - 1][0], path[path.length - 1][1], 10, clock);
         clearInterval(simTimer);
