@@ -8,7 +8,8 @@ schema to write .cache/map/kerala-<date>.mbtiles. Each build is a new file:
 the running app switches to the newest within seconds (Windows cannot
 replace a file the app has open), and older builds are deleted once free. The app serves that file at
 /tiles/{z}/{x}/{y}.pbf and draws it in a plain style (web/basemap.js).
-It then rebuilds the sea (tools/build_sea.py) from the same extract.
+It then rebuilds the sea (tools/build_sea.py) from the same extract, and
+the roads and cities around Kerala (tools/build_region.py).
 Needs Docker Desktop running. Takes a few minutes; re-run it to refresh the
 map from newer OpenStreetMap data.
 """
@@ -54,8 +55,11 @@ def main():
     print("Map tiles ready: %s (%.0f MB)" % (out, os.path.getsize(out) / 1e6))
     print("The running app switches to it within about 15 seconds.")
     remove_old(keep=out)
-    print("Building the sea from the coastline...", flush=True)
-    return subprocess.run([sys.executable, os.path.join(ROOT, "tools", "build_sea.py")]).returncode
+    for script in ("build_sea.py", "build_region.py"):
+        code = subprocess.run([sys.executable, os.path.join(ROOT, "tools", script)]).returncode
+        if code:
+            return code
+    return 0
 
 
 def remove_old(keep):

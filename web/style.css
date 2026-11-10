@@ -183,6 +183,15 @@ html, body {
 [data-map-theme="dark"] .leaflet-bar a:hover { background: #2a2f37; }
 [data-map-theme="dark"] .leaflet-control-attribution { background: rgba(20,22,25,.75); color: #8a9099; }
 [data-map-theme="dark"] .leaflet-control-attribution a { color: #9cc7ff; }
+/* The map credit folded into a small (i) button (basemap.js). */
+.leaflet-control-attribution.credit--folded {
+  font-size: 0; width: 20px; height: 20px; padding: 0; margin: 0 6px 6px 0;
+  border-radius: 50%; cursor: pointer; display: grid; place-items: center;
+}
+.leaflet-control-attribution.credit--folded > * { display: none; }
+.leaflet-control-attribution.credit--folded::after {
+  content: "i"; font: italic 700 12px/1 Georgia, serif;
+}
 
 /* ----------------------------------------------------------- search + buttons */
 

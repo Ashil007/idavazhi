@@ -8,8 +8,12 @@
  *     tools/build_map.py makes from an OpenStreetMap extract (/tiles/...);
  *   - the sea, which OpenStreetMap keeps only as a coastline, built into
  *     /map/sea.geojson by tools/build_sea.py;
+ *   - main roads, cities and state borders around Kerala, from Natural
+ *     Earth (public domain), in /map/region.geojson (tools/build_region.py);
  *   - the letters for labels (/fonts/, Noto Sans).
- * The map data is OpenStreetMap's, so its credit stays on the map.
+ * The Kerala map data is OpenStreetMap's, so its credit is shown when the
+ * map opens; it then folds into an (i) button, as the OpenStreetMap
+ * Foundation's attribution guidelines allow.
  */
 "use strict";
 
@@ -41,6 +45,10 @@ var BASEMAP = (function () {
   var ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
   // The area the map covers (tools/build_map.py), as [[south, west], [north, east]].
   var AREA = [[8.15, 74.80], [12.85, 77.45]];
+  // How far the view may go: the neighbouring states (region.geojson and
+  // the sea reach 8 degrees out, past what any screen shows from here).
+  var VIEW = [[AREA[0][0] - 6, AREA[0][1] - 6], [AREA[1][0] + 6, AREA[1][1] + 6]];
+  var CREDIT_FOLD_MS = 5000;
 
   function roadWidth(minor, major) {
     return ["interpolate", ["exponential", 1.6], ["zoom"], 8, minor * 0.3, 12, minor, 16, major, 19, major * 3];
@@ -70,7 +78,8 @@ var BASEMAP = (function () {
       sources: {
         own: { type: "vector", tiles: [origin + "/tiles/{z}/{x}/{y}.pbf"], minzoom: 0, maxzoom: 14,
                bounds: [AREA[0][1], AREA[0][0], AREA[1][1], AREA[1][0]] },
-        sea: { type: "geojson", data: origin + "/map/sea.geojson" }
+        sea: { type: "geojson", data: origin + "/map/sea.geojson" },
+        region: { type: "geojson", data: origin + "/map/region.geojson" }
       },
       layers: [
         { id: "land", type: "background", paint: { "background-color": C.land } },
@@ -89,6 +98,17 @@ var BASEMAP = (function () {
         { id: "boundary", type: "line", source: R, "source-layer": "boundary",
           filter: ["all", ["<=", ["get", "admin_level"], 4], ["!=", ["get", "maritime"], 1]],
           paint: { "line-color": C.boundary, "line-width": 1, "line-dasharray": [3, 2] } },
+        // Around Kerala: state borders, highways, cities (Natural Earth).
+        { id: "region-border", type: "line", source: "region",
+          filter: ["==", ["get", "kind"], "border"],
+          paint: { "line-color": C.boundary, "line-width": 1, "line-dasharray": [3, 2] } },
+        { id: "region-road", type: "line", source: "region",
+          filter: ["==", ["get", "kind"], "road"],
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": ["case", ["==", ["get", "class"], "major"], C.major, C.road],
+                   "line-width": ["interpolate", ["linear"], ["zoom"], 6,
+                                  ["case", ["==", ["get", "class"], "major"], 1.2, 0.6], 12,
+                                  ["case", ["==", ["get", "class"], "major"], 3.5, 2]] } },
         { id: "rail", type: "line", source: R, "source-layer": "transportation", minzoom: 10,
           filter: ["match", ["get", "class"], ["rail", "transit"], true, false],
           paint: { "line-color": C.rail, "line-width": 1.2, "line-dasharray": [4, 3] } },
@@ -135,7 +155,25 @@ var BASEMAP = (function () {
           filter: ["match", ["get", "class"], ["state", "country"], true, false],
           layout: { "text-field": NAME, "text-font": FONT_R, "text-size": 12, "text-transform": "uppercase",
                     "text-letter-spacing": 0.1 },
-          paint: { "text-color": C.textSoft, "text-halo-color": C.halo, "text-halo-width": 1.2 } }
+          paint: { "text-color": C.textSoft, "text-halo-color": C.halo, "text-halo-width": 1.2 } },
+        // Around Kerala: state names zoomed out, then cities, then towns.
+        { id: "region-state", type: "symbol", source: "region", maxzoom: 9,
+          filter: ["==", ["get", "kind"], "state"],
+          layout: { "text-field": ["get", "name"], "text-font": FONT_R, "text-size": 12,
+                    "text-transform": "uppercase", "text-letter-spacing": 0.1 },
+          paint: { "text-color": C.textSoft, "text-halo-color": C.halo, "text-halo-width": 1.2 } },
+        { id: "region-town", type: "symbol", source: "region", minzoom: 9,
+          filter: ["all", ["==", ["get", "kind"], "place"], [">", ["get", "rank"], 6]],
+          layout: { "text-field": ["get", "name"], "text-font": FONT_R, "text-size": 12 },
+          paint: { "text-color": C.textSoft, "text-halo-color": C.halo, "text-halo-width": 1.5 } },
+        { id: "region-city", type: "symbol", source: "region", minzoom: 5,
+          filter: ["all", ["==", ["get", "kind"], "place"], ["<=", ["get", "rank"], 6]],
+          layout: { "text-field": ["get", "name"], "text-font": FONT_M,
+                    "text-size": ["interpolate", ["linear"], ["zoom"], 5, 10, 12, 15],
+                    "symbol-sort-key": ["-", 0, ["get", "pop"]],
+                    "text-transform": dark ? ["step", ["zoom"], "uppercase", 10, "none"] : "none",
+                    "text-letter-spacing": dark ? ["step", ["zoom"], 0.08, 10, 0.02] : 0 },
+          paint: { "text-color": C.text, "text-halo-color": C.halo, "text-halo-width": 1.6 } }
       ]
     };
   }
@@ -176,10 +214,34 @@ var BASEMAP = (function () {
     new Ctl().addTo(map);
   }
 
+  // The OpenStreetMap credit: shown when the map opens, folded into an (i)
+  // button after five seconds or when the map is first dragged; tapping the
+  // (i) opens it again.
+  function foldingCredit(map) {
+    // On a phone the bottom sheet covers the lower corners: top right, then.
+    var phone = window.matchMedia("(max-width: 860px)");
+    function place() { map.attributionControl.setPosition(phone.matches ? "topright" : "bottomright"); }
+    place();
+    if (phone.addEventListener) phone.addEventListener("change", place);
+    var el = map.attributionControl.getContainer();
+    el.classList.add("credit");
+    el.setAttribute("title", "Map credits");
+    var timer = null;
+    function fold() { el.classList.add("credit--folded"); }
+    function later() { clearTimeout(timer); timer = setTimeout(fold, CREDIT_FOLD_MS); }
+    later();
+    map.once("dragstart", fold);
+    L.DomEvent.on(el, "click", function (e) {
+      if (!el.classList.contains("credit--folded")) return;   // links work as usual
+      L.DomEvent.preventDefault(e);
+      el.classList.remove("credit--folded");
+      later();
+    });
+  }
+
   function init(map) {
-    // Only Kerala is mapped: keep the view on it.
-    var area = L.latLngBounds(AREA).pad(0.15);
-    map.setMaxBounds(area);
+    // Kerala in detail, the states around it in outline: keep the view near.
+    map.setMaxBounds(L.latLngBounds(VIEW));
     map.options.maxBoundsViscosity = 0.8;
     map.setMinZoom(7);
     if (!L.maplibreGL) {     // the map library failed to load: no base map,
@@ -188,6 +250,7 @@ var BASEMAP = (function () {
     }
     layer = L.maplibreGL({ style: style(window.location.origin), attribution: ATTR }).addTo(map);
     themeControl(map);
+    foldingCredit(map);
   }
 
   return { init: init, theme: function () { return theme; } };
