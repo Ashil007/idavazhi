@@ -129,4 +129,18 @@
     }, { rootMargin: "0px 0px -8% 0px" });
     items.forEach(function (el) { el.classList.add("reveal"); io.observe(el); });
   }
+
+  // The full guide: light up the topic being read in the topic list.
+  var toc = document.querySelectorAll(".guide__toc a");
+  if (toc.length && "IntersectionObserver" in window) {
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        toc.forEach(function (a) {
+          a.classList.toggle("is-here", a.getAttribute("href") === "#" + en.target.id);
+        });
+      });
+    }, { rootMargin: "-30% 0px -60% 0px" });
+    document.querySelectorAll(".chapter").forEach(function (c) { spy.observe(c); });
+  }
 })();

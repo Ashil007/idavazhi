@@ -358,3 +358,52 @@ p { margin: 0; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .btn, .sheet, .sheet__card { transition: none; animation: none; }
 }
+
+/* ------------------------------------------------------------ the full guide */
+.guide__layout { display: grid; gap: 40px; margin-top: 48px; }
+.guide__layout > * { min-width: 0; }   /* the topic row scrolls instead of widening the page */
+.guide__toc ol {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  margin-right: -16px; padding-right: 16px;          /* run to the screen edge on phones */
+}
+.guide__toc ol::-webkit-scrollbar { display: none; }
+.guide__toc a {
+  display: flex; align-items: center; gap: 8px; white-space: nowrap;
+  padding: 8px 14px; border-radius: 999px; background: var(--panel);
+  color: var(--ink-dim); font-size: 16px; font-weight: 600; text-decoration: none;
+}
+.guide__toc a span { color: var(--alarm); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.guide__toc a:hover, .guide__toc a.is-here { color: var(--ink); background: var(--panel-2); }
+@media (min-width: 1040px) {
+  .guide__layout { grid-template-columns: 260px 1fr; gap: 64px; align-items: start; }
+  .guide__toc { position: sticky; top: 100px; }
+  .guide__toc ol { display: block; overflow: visible; margin: 0; padding: 0; }
+  .guide__toc a { background: none; padding: 8px 12px; border-radius: 10px; white-space: normal; }
+}
+
+.chapter { scroll-margin-top: 96px; }
+.chapter + .chapter { margin-top: 72px; }
+.chapter h3 {
+  display: flex; align-items: baseline; gap: 16px;
+  font-size: clamp(24px, 3vw, 32px); font-weight: 800; line-height: 1.2; letter-spacing: -.02em;
+}
+.chapter__n { color: var(--alarm); font-size: 16px; font-weight: 800; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.chapter__lead { margin-top: 12px; color: var(--ink-dim); font-size: 18px; max-width: 62ch; }
+
+.fn { margin: 24px 0 0; border-top: 1px solid var(--line); }
+.fn__item { display: grid; gap: 6px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.fn dt { font-size: 18px; font-weight: 700; line-height: 1.4; color: var(--ink); }
+.fn dt .dot { margin-right: 0; vertical-align: 1px; }
+.fn dd { margin: 0; color: var(--ink-dim); font-size: 17px; line-height: 1.65; max-width: 64ch; }
+.fn dd b { color: var(--ink); font-weight: 700; }
+.fn dd a { color: var(--accent); }
+@media (min-width: 760px) {
+  .fn__item { grid-template-columns: 240px 1fr; gap: 32px; padding: 24px 0; }
+}
+/* A button or label as it appears in the app. */
+.ui {
+  display: inline-block; padding: 0 8px; border-radius: 6px;
+  background: var(--panel-2); color: var(--ink);
+  font-size: .92em; font-weight: 600; line-height: 1.6; white-space: nowrap;
+}
