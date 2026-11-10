@@ -3,7 +3,7 @@
   "short_name": "Vazhi",
   "description": "Door-to-door trips by bus, train and metro in Kerala, with an alarm before your stop.",
   "id": "/",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

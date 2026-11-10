@@ -28,6 +28,22 @@ python serve.py
 Then open <http://127.0.0.1:8000>. Useful flags: `--port 8001`, `--host 0.0.0.0`,
 `--no-browser`. On Windows you can double-click `run.bat`.
 
+### The website and the app
+
+- `/` is the **Vazhi website**: what Vazhi is for, its features, screenshots,
+  how it works, questions and answers, and two ways in: **Download the app**
+  and **Use the web version**. The page is `web/home.html` (with `home.css`
+  and `home.js`); the screenshots in `web/site/` are of the real app.
+- `/app` is the **app itself** (`web/index.html`). The installed app opens
+  here too (`start_url` in the manifest).
+- Shared trips use `/app?from=...`. Older links (`/?from=...`) are sent on to
+  `/app`.
+
+**Download the app** installs Vazhi from the website, with no app store. On
+Android, and in Chrome or Edge on a computer, it opens the browser's own Install
+prompt. On an iPhone, or where the browser has no prompt, it shows the steps
+instead (Share > Add to Home Screen, or the browser menu).
+
 ### Offline region data
 
 On start the server downloads every metro station, railway station, bus stop
@@ -284,7 +300,8 @@ tools/
   phone_link.py     temporary https link so the app (and trip alarm) works on a phone
   make_icons.py     draws the app icons into web/icons (Pillow)
 web/                Leaflet front end (times.js: bus times, stops.js: stop names,
-                    permit.js: the location and alarm permission screen)
+                    permit.js: the location and alarm permission screen);
+                    home.html/.css/.js: the website at "/", site/: its screenshots
 data/               riders' data (timings.db, stops.db) - live data, not in git
 ```
 

@@ -92,6 +92,9 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, code, payload):
         self._send(code, json.dumps(payload).encode("utf-8"), "application/json; charset=utf-8")
 
+    def _redirect(self, where: str):
+        self._send(302, b"", "text/plain; charset=utf-8", {"Location": where})
+
     def _static(self, path: str):
         rel = posixpath.normpath(urllib.parse.unquote(path)).lstrip("/")
         if rel in ("", "."):
@@ -217,6 +220,15 @@ class Handler(BaseHTTPRequestHandler):
                     raise PlanError("Unknown mode.")
                 threading.Thread(target=_prefetch, args=(point, mode), daemon=True).start()
                 self._json(202, {"ok": True})
+            elif route == "/" and ("from" in params or "to" in params):
+                # A trip shared before the app moved to /app.
+                self._redirect("/app?" + parsed.query)
+            elif route == "/":
+                self._static("home.html")          # the Vazhi website
+            elif route == "/app/":
+                self._redirect("/app" + ("?" + parsed.query if parsed.query else ""))
+            elif route == "/app":
+                self._static("index.html")         # the app itself
             else:
                 self._static(route)
         except PlanError as exc:

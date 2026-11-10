@@ -10,9 +10,9 @@
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v5";
+var CACHE = "vazhi-shell-v6";
 var SHELL = [
-  "/", "index.html", "style.css", "manifest.webmanifest",
+  "/", "/app", "home.css", "home.js", "style.css", "manifest.webmanifest",
   "basemap.js", "sheet.js", "drawer.js", "alerts.js", "times.js", "stops.js", "install.js", "permit.js", "notice.js", "app.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/favicon-32.png",
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
@@ -54,13 +54,14 @@ self.addEventListener("fetch", function (event) {
     if (res.ok) {
       var copy = res.clone();
       caches.open(CACHE).then(function (cache) {
-        // A shared-trip link (/?from=...) is the same page as "/".
-        cache.put(req.mode === "navigate" ? "/" : req, copy);
+        // A page is kept under its path alone: a shared-trip link
+        // (/app?from=...) is the same page as "/app".
+        cache.put(req.mode === "navigate" ? url.pathname : req, copy);
       });
     }
     return res;
   }).catch(function () {
-    return caches.match(req.mode === "navigate" ? "/" : req, { ignoreSearch: req.mode === "navigate" })
+    return caches.match(req.mode === "navigate" ? url.pathname : req, { ignoreSearch: req.mode === "navigate" })
       .then(function (hit) { return hit || Response.error(); });
   }));
 });
@@ -70,6 +71,6 @@ self.addEventListener("notificationclick", function (event) {
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true })
     .then(function (pages) {
       if (pages.length) return pages[0].focus();
-      return self.clients.openWindow("/");
+      return self.clients.openWindow("/app");
     }));
 });
