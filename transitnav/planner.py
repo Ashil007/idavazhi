@@ -12,7 +12,9 @@ train, subway/light rail for metro).
 
 from __future__ import annotations
 
+import math
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
@@ -35,6 +37,7 @@ from .config import (
     STOP_CANDIDATES,
     STOP_SHORTLIST,
     TRACK_SWITCH_PENALTY_M,
+    TILE_TTL_S,
     TRANSFER_WALK_S,
     access_config,
     mode_config,
@@ -880,7 +883,121 @@ def _train_line(tt, stops):
             if via > 2.5 * haversine(*prev, *nxt) + 15000:
                 continue
         line.append(p)
-    return [list(p) for p in line]
+    return _on_track([list(p) for p in line], tt)
+
+
+# Tracing a timetable ride along the railway. Station points in the timetable
+# can sit a little off the track, so track nodes this far away still count.
+TRACK_SNAP_M = 1500.0
+# A traced stretch longer than this times the straight line (plus a little)
+# has gone the wrong way round a junction; the straight line is kept instead.
+TRACK_DETOUR_FACTOR = 1.8
+TRACK_DETOUR_EXTRA_M = 4000.0
+_track_graphs = {}            # tiles -> Graph, so each area is built once
+_track_lock = threading.Lock()
+_track_fetching = set()       # tiles being downloaded in the background
+
+
+def _track_graph(tiles, tt):
+    """Railway graph for these 1-degree tiles, from the disk cache only. Tiles
+    not on disk yet are downloaded in the background for next time; returns
+    the graph and the set of tiles it covers."""
+    cfg = mode_config("train")
+    deg = cfg["tile_deg"]
+
+    def ql(t):
+        return overpass.build_network_query(overpass.tile_bbox(t, deg),
+                                            cfg["network_filters"], cfg["network_exclude"])
+
+    have = tuple(sorted(t for t in tiles if overpass.is_cached(ql(t), None)))
+    missing = [t for t in tiles if t not in have and t not in _track_fetching]
+    if missing:
+        _track_fetching.update(missing)
+
+        def fetch():
+            for t in missing:
+                try:
+                    overpass.query(ql(t), allow_empty=True, ttl_s=TILE_TTL_S)
+                except Exception:  # noqa: BLE001 - next trip tries again
+                    pass
+                finally:
+                    _track_fetching.discard(t)
+        threading.Thread(target=fetch, daemon=True).start()
+    if not have:
+        return None, set()
+    with _track_lock:
+        graph = _track_graphs.get(have)
+        if graph is None:
+            seen, elements = set(), []
+            for t in have:
+                for el in (overpass._cache_get(ql(t), None) or {}).get("elements", ()):
+                    key = (el.get("type"), el.get("id"), "nodes" in el, "tags" in el)
+                    if key not in seen:
+                        seen.add(key)
+                        elements.append(el)
+            nodes, ways, directions = overpass.parse_network({"elements": elements})
+            graph = Graph.from_osm(nodes, ways, directions)
+            # Join the tracks at stations, where OSM's separate lines and the
+            # two tracks of a double line meet (crossovers are not mapped as
+            # running lines).
+            box = [overpass.tile_bbox(t, deg) for t in have]
+            inside = [s for s in tt.served()
+                      if any(b[0] <= s["lat"] < b[2] and b[1] <= s["lon"] < b[3] for b in box)]
+            _link_interchanges(graph, inside, cfg)
+            if len(_track_graphs) >= 8:
+                _track_graphs.pop(next(iter(_track_graphs)))
+            _track_graphs[have] = graph
+    return graph, set(have)
+
+
+def _on_track(points, tt):
+    """Redraw a ride's station-to-station line along the railway track.
+    Stretches the map data does not cover, or where no sensible track path is
+    found, stay straight."""
+    if len(points) < 2:
+        return points
+    deg = mode_config("train")["tile_deg"]
+    tiles = set()
+    for a, b in zip(points, points[1:]):
+        tiles.update(overpass.tiles_for_bbox(
+            (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])), deg))
+    if len(tiles) > 40:            # a cross-country ride: too much to build per trip
+        return points
+    try:
+        graph, covered = _track_graph(sorted(tiles), tt)
+    except Exception as exc:  # noqa: BLE001 - a straight line is still a usable map
+        print("  track tracing skipped: %s" % exc)
+        return points
+    if graph is None:
+        return points
+
+    def tile(p):
+        return (math.floor(p[0] / deg), math.floor(p[1] / deg))
+
+    traced = []
+    for a, b in zip(points, points[1:]):
+        path = None
+        if tile(a) in covered and tile(b) in covered:
+            ca = graph.nearest_nodes(a[0], a[1], TRACK_SNAP_M, limit=24)
+            cb = graph.nearest_nodes(b[0], b[1], TRACK_SNAP_M, limit=24)
+            found = graph.route(dict(ca), dict(cb)) if ca and cb else None
+            if found is not None:
+                path = graph.path_coords(found[1])
+                if path_length(path) > (TRACK_DETOUR_FACTOR * haversine(a[0], a[1], b[0], b[1])
+                                        + TRACK_DETOUR_EXTRA_M):
+                    path = None
+        traced.append(path)
+
+    # The line starts and ends at the platforms. In between, a station point
+    # is kept only next to a straight stretch: where track meets track, the
+    # timetable's slightly-off station point would put a spike in the line.
+    out = [points[0]]
+    for i, path in enumerate(traced):
+        out.extend(path or [])
+        last = i == len(traced) - 1
+        if last or path is None or traced[i + 1] is None:
+            out.append(points[i + 1])
+    return out
 
 
 def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report):
