@@ -102,6 +102,13 @@ class Handler(BaseHTTPRequestHandler):
         full = os.path.normpath(os.path.join(WEB_ROOT, rel))
         # commonpath, not a string prefix: "web-old" starts with "web" too.
         inside = os.path.commonpath([full, WEB_ROOT]) == WEB_ROOT
+        if inside and rel.startswith("fonts/") and rel.endswith(".pbf") and not os.path.isfile(full):
+            # Map letters come in blocks of 256 characters; only the blocks
+            # Kerala's names use are kept (web/fonts/README.md). Any other
+            # block is answered as empty, so the map leaves those letters out
+            # instead of failing the whole label.
+            self._send(200, b"", "application/x-protobuf")
+            return
         if not inside or not os.path.isfile(full):
             self._send(404, b"Not found", "text/plain; charset=utf-8")
             return

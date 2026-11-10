@@ -8,6 +8,7 @@ schema to write .cache/map/kerala-<date>.mbtiles. Each build is a new file:
 the running app switches to the newest within seconds (Windows cannot
 replace a file the app has open), and older builds are deleted once free. The app serves that file at
 /tiles/{z}/{x}/{y}.pbf and draws it in a plain style (web/basemap.js).
+It then rebuilds the sea (tools/build_sea.py) from the same extract.
 Needs Docker Desktop running. Takes a few minutes; re-run it to refresh the
 map from newer OpenStreetMap data.
 """
@@ -42,8 +43,8 @@ def main():
     print("Building map tiles with tilemaker (a few minutes)...", flush=True)
     rel = lambda p: "/data/" + os.path.relpath(p, CACHE).replace("\\", "/")
     # tilemaker needs the area stated to read its (optional) coastline
-    # shapefiles; without them it simply leaves the sea out, which the app's
-    # style takes from OpenFreeMap instead.
+    # shapefiles; without them it simply leaves the sea out, which
+    # tools/build_sea.py makes from the extract's coastline instead.
     result = subprocess.run(["docker", "run", "--rm", "-v", "%s:/data" % CACHE, IMAGE,
                              rel(PBF), "--output", rel(tmp), "--bbox", BBOX])
     if result.returncode != 0 or not os.path.exists(tmp):
@@ -53,7 +54,8 @@ def main():
     print("Map tiles ready: %s (%.0f MB)" % (out, os.path.getsize(out) / 1e6))
     print("The running app switches to it within about 15 seconds.")
     remove_old(keep=out)
-    return 0
+    print("Building the sea from the coastline...", flush=True)
+    return subprocess.run([sys.executable, os.path.join(ROOT, "tools", "build_sea.py")]).returncode
 
 
 def remove_old(keep):

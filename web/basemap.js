@@ -2,14 +2,14 @@
  * roads and a few labels - so the trip's own colours stand out. A switch on
  * the map turns on the plain light map instead; the choice is remembered.
  *
- * One style of our own (below), in two palettes. It draws OpenStreetMap
- * vector tiles in the OpenMapTiles layout from two places:
- *   - OpenFreeMap (free, no key) for the whole world - and always for land,
- *     sea and parks, since the coastline needs data an extract lacks;
- *   - the app's own tiles for Kerala (tools/build_map.py builds them from an
- *     OpenStreetMap extract), used for roads, railways and labels whenever
- *     the view is centred inside Kerala, so the common case is served from
- *     this computer.
+ * Everything the map draws comes from this app's own server - no outside
+ * map service:
+ *   - vector tiles of Kerala in the OpenMapTiles layout, which
+ *     tools/build_map.py makes from an OpenStreetMap extract (/tiles/...);
+ *   - the sea, which OpenStreetMap keeps only as a coastline, built into
+ *     /map/sea.geojson by tools/build_sea.py;
+ *   - the letters for labels (/fonts/, Noto Sans).
+ * The map data is OpenStreetMap's, so its credit stays on the map.
  */
 "use strict";
 
@@ -38,8 +38,9 @@ var BASEMAP = (function () {
   var theme = "dark";
   try { if (localStorage.getItem(THEME_KEY) === "light") theme = "light"; } catch (e) { /* private window */ }
   var C = PALETTES[theme];
-  var ATTR = '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> ' +
-             '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors';
+  var ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  // The area the map covers (tools/build_map.py), as [[south, west], [north, east]].
+  var AREA = [[8.15, 74.80], [12.85, 77.45]];
 
   function roadWidth(minor, major) {
     return ["interpolate", ["exponential", 1.6], ["zoom"], 8, minor * 0.3, 12, minor, 16, major, 19, major * 3];
@@ -59,33 +60,33 @@ var BASEMAP = (function () {
     return stops;
   }
 
-  // `roads` is "own" (this computer's Kerala tiles) or "base" (OpenFreeMap).
-  function style(roads, origin) {
+  function style(origin) {
     C = PALETTES[theme];
     var dark = theme === "dark";
-    var sources = { base: { type: "vector", url: "https://tiles.openfreemap.org/planet" } };
-    if (roads === "own") {
-      sources.own = { type: "vector", tiles: [origin + "/tiles/{z}/{x}/{y}.pbf"], minzoom: 0, maxzoom: 14 };
-    }
-    var R = roads;
+    var R = "own";
     return {
       version: 8,
-      glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
-      sources: sources,
+      glyphs: origin + "/fonts/{fontstack}/{range}.pbf",
+      sources: {
+        own: { type: "vector", tiles: [origin + "/tiles/{z}/{x}/{y}.pbf"], minzoom: 0, maxzoom: 14,
+               bounds: [AREA[0][1], AREA[0][0], AREA[1][1], AREA[1][0]] },
+        sea: { type: "geojson", data: origin + "/map/sea.geojson" }
+      },
       layers: [
         { id: "land", type: "background", paint: { "background-color": C.land } },
-        { id: "wood", type: "fill", source: "base", "source-layer": "landcover",
+        { id: "wood", type: "fill", source: R, "source-layer": "landcover",
           filter: ["match", ["get", "class"], ["wood", "forest", "grass", "wetland"], true, false],
           paint: { "fill-color": C.wood, "fill-opacity": 0.7 } },
-        { id: "park", type: "fill", source: "base", "source-layer": "park",
+        { id: "park", type: "fill", source: R, "source-layer": "park",
           paint: { "fill-color": C.park } },
-        { id: "water", type: "fill", source: "base", "source-layer": "water",
+        { id: "sea", type: "fill", source: "sea", paint: { "fill-color": C.water } },
+        { id: "water", type: "fill", source: R, "source-layer": "water",
           paint: { "fill-color": C.water } },
-        { id: "waterway", type: "line", source: "base", "source-layer": "waterway", minzoom: 10,
+        { id: "waterway", type: "line", source: R, "source-layer": "waterway", minzoom: 10,
           paint: { "line-color": C.water, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 16, 3] } },
         { id: "building", type: "fill", source: R, "source-layer": "building", minzoom: 15,
           paint: { "fill-color": C.building } },
-        { id: "boundary", type: "line", source: "base", "source-layer": "boundary",
+        { id: "boundary", type: "line", source: R, "source-layer": "boundary",
           filter: ["all", ["<=", ["get", "admin_level"], 4], ["!=", ["get", "maritime"], 1]],
           paint: { "line-color": C.boundary, "line-width": 1, "line-dasharray": [3, 2] } },
         { id: "rail", type: "line", source: R, "source-layer": "transportation", minzoom: 10,
@@ -123,14 +124,14 @@ var BASEMAP = (function () {
           layout: { "text-field": NAME, "text-font": FONT_R, "text-size": 12 },
           paint: { "text-color": C.textSoft, "text-halo-color": C.halo, "text-halo-width": 1.5 } },
         // Towns: spaced-out capitals on the dark map when zoomed out.
-        { id: "place-town", type: "symbol", source: "base", "source-layer": "place", minzoom: 3,
+        { id: "place-town", type: "symbol", source: R, "source-layer": "place", minzoom: 3,
           filter: ["match", ["get", "class"], ["city", "town"], true, false],
           layout: { "text-field": NAME, "text-font": FONT_M,
                     "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 12, 15],
                     "text-transform": dark ? ["step", ["zoom"], "uppercase", 10, "none"] : "none",
                     "text-letter-spacing": dark ? ["step", ["zoom"], 0.08, 10, 0.02] : 0 },
           paint: { "text-color": C.text, "text-halo-color": C.halo, "text-halo-width": 1.6 } },
-        { id: "place-state", type: "symbol", source: "base", "source-layer": "place", maxzoom: 7,
+        { id: "place-state", type: "symbol", source: R, "source-layer": "place", maxzoom: 7,
           filter: ["match", ["get", "class"], ["state", "country"], true, false],
           layout: { "text-field": NAME, "text-font": FONT_R, "text-size": 12, "text-transform": "uppercase",
                     "text-letter-spacing": 0.1 },
@@ -139,13 +140,10 @@ var BASEMAP = (function () {
     };
   }
 
-  var layer = null, ownBounds = null, using = null;
+  var layer = null;
 
-  function pick(map, force) {
-    var want = ownBounds && ownBounds.contains(map.getCenter()) && map.getZoom() >= 8 ? "own" : "base";
-    if (want === using && !force) return;
-    using = want;
-    layer.getMaplibreMap().setStyle(style(want, window.location.origin));
+  function restyle() {
+    layer.getMaplibreMap().setStyle(style(window.location.origin));
   }
 
   // The light / dark switch, under the zoom buttons.
@@ -170,7 +168,7 @@ var BASEMAP = (function () {
           theme = theme === "dark" ? "light" : "dark";
           try { localStorage.setItem(THEME_KEY, theme); } catch (err) { /* not remembered */ }
           show();
-          pick(map, true);
+          restyle();
         });
         return box;
       }
@@ -179,23 +177,18 @@ var BASEMAP = (function () {
   }
 
   function init(map) {
-    if (!L.maplibreGL) {     // the map library failed to load: plain OSM tiles
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+    // Only Kerala is mapped: keep the view on it.
+    var area = L.latLngBounds(AREA).pad(0.15);
+    map.setMaxBounds(area);
+    map.options.maxBoundsViscosity = 0.8;
+    map.setMinZoom(7);
+    if (!L.maplibreGL) {     // the map library failed to load: no base map,
+      map.attributionControl.addAttribution(ATTR);   // the trip still draws
       return;
     }
-    using = "base";
-    layer = L.maplibreGL({ style: style("base", window.location.origin), attribution: ATTR }).addTo(map);
+    layer = L.maplibreGL({ style: style(window.location.origin), attribution: ATTR }).addTo(map);
     themeControl(map);
-    fetch("/api/mapinfo").then(function (r) { return r.json(); }).then(function (info) {
-      if (!info.available) return;
-      var b = info.bounds;   // [west, south, east, north]
-      ownBounds = L.latLngBounds([b[1], b[0]], [b[3], b[2]]);
-      map.on("moveend", function () { pick(map); });
-      pick(map);
-    }).catch(function () { /* OpenFreeMap alone, then */ });
   }
 
-  return { init: init, usingOwnTiles: function () { return using === "own"; },
-           theme: function () { return theme; } };
+  return { init: init, theme: function () { return theme; } };
 })();

@@ -61,16 +61,18 @@ python -m transitnav.preload kerala        # preload without starting the server
 python -m transitnav.preload timetable     # just the train timetable (below)
 ```
 
-### Own map and routing server (optional, needs Docker Desktop)
+### The map and the routing server (needs Docker Desktop)
 
-The map is drawn in a plain, delivery-app style (`web/basemap.js`) from
-OpenStreetMap vector tiles. By default they come from
-[OpenFreeMap](https://openfreemap.org), which is free and needs no key. For
-Kerala you can build your own tiles from an OpenStreetMap extract, so the map
-is served from this computer:
+The map is drawn in a plain, delivery-app style (`web/basemap.js`) and every
+part of it comes from this app's own server, with no outside map service:
+vector tiles of Kerala built from an OpenStreetMap extract, the sea
+(`web/map/sea.geojson`, built from the extract's coastline) and the label
+fonts (`web/fonts/`, Noto Sans). Until the tiles are built the map shows only
+land and sea. The data is OpenStreetMap's, so the map keeps its credit.
 
 ```bash
-python tools/build_map.py           # Kerala extract -> .cache/map/kerala-<date>.mbtiles (tilemaker)
+python tools/build_map.py           # Kerala extract -> .cache/map/kerala-<date>.mbtiles (tilemaker) + the sea
+python tools/build_sea.py           # just the sea, from the extract already downloaded
 python tools/routing_server.py start  # your own Valhalla routing server on port 8002
 ```
 
