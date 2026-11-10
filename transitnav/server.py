@@ -6,6 +6,7 @@ than a Python install.
 
 from __future__ import annotations
 
+import gzip
 import json
 import math
 import mimetypes
@@ -19,6 +20,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import basemap, locate, overpass, places, preload, stopnames, timings
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
+
+GZIP_MIN = 64 * 1024
+mimetypes.add_type("application/geo+json", ".geojson")
+_gz_cache = {}          # path -> (mtime, gzipped bytes)
+_gz_lock = threading.Lock()
+
+
+def _gzipped(path: str, body: bytes) -> bytes:
+    """`body` gzipped, compressed once per version of the file."""
+    mtime = os.path.getmtime(path)
+    with _gz_lock:
+        hit = _gz_cache.get(path)
+        if hit and hit[0] == mtime:
+            return hit[1]
+    data = gzip.compress(body, 6)
+    with _gz_lock:
+        _gz_cache[path] = (mtime, data)
+    return data
 
 NL = chr(10)
 
@@ -116,7 +135,14 @@ class Handler(BaseHTTPRequestHandler):
         if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
             ctype += "; charset=utf-8"
         with open(full, "rb") as fh:
-            self._send(200, fh.read(), ctype)
+            body = fh.read()
+        extra = None
+        # Big map data (the 1.8 MB stop list) goes over the phone's data
+        # connection gzipped: about an eighth of the size.
+        if len(body) > GZIP_MIN and "gzip" in (self.headers.get("Accept-Encoding") or "")                 and (ctype.startswith("text/") or "json" in ctype or rel.endswith(".geojson")):
+            body = _gzipped(full, body)
+            extra = {"Content-Encoding": "gzip", "Vary": "Accept-Encoding"}
+        self._send(200, body, ctype, extra)
 
     def _search(self, params):
         """Places for the destination box, as the user types.

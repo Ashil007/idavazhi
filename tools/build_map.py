@@ -10,6 +10,8 @@ replace a file the app has open), and older builds are deleted once free. The ap
 /tiles/{z}/{x}/{y}.pbf and draws it in a plain style (web/basemap.js).
 It then rebuilds the sea (tools/build_sea.py) from the same extract, and
 the roads and cities around Kerala (tools/build_region.py).
+Every bus stop, bus stand and station for the "All stops" switch comes from
+the same extract (tools/build_transit.py).
 Needs Docker Desktop running. Takes a few minutes; re-run it to refresh the
 map from newer OpenStreetMap data.
 """
@@ -55,7 +57,7 @@ def main():
     print("Map tiles ready: %s (%.0f MB)" % (out, os.path.getsize(out) / 1e6))
     print("The running app switches to it within about 15 seconds.")
     remove_old(keep=out)
-    for script in ("build_sea.py", "build_region.py"):
+    for script in ("build_sea.py", "build_region.py", "build_transit.py"):
         code = subprocess.run([sys.executable, os.path.join(ROOT, "tools", script)]).returncode
         if code:
             return code

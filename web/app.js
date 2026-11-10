@@ -25,7 +25,7 @@ var ICONS = {
 };
 
 var state = {
-  mode: null,          // chosen by the user; nothing is assumed
+  mode: "bus",         // the usual way to travel; the rider can change it
   access: "walk",
   origin: null,
   destination: null,
@@ -128,7 +128,20 @@ map.on("click", function (e) {
 
 /* ---------------------------------------------------------------- modes */
 
-// One row of toggle buttons that writes the chosen id into state[key].
+// Writes the chosen id into state[key] and lights the matching button in
+// every row that offers it (the panel, and the switch on the map). With a
+// trip on screen, the trip is planned again for the new choice.
+function choose(key, id) {
+  var changed = state[key] !== id;
+  state[key] = id;
+  document.querySelectorAll('.mode[data-key="' + key + '"]').forEach(function (b) {
+    b.setAttribute("aria-pressed", String(b.getAttribute("data-id") === id));
+  });
+  if (key === "mode") { prefetch(state.origin); prefetch(state.destination); }
+  if (changed && !el("result-block").hidden && state.origin && state.destination) planJourney();
+}
+
+// One row of toggle buttons for state[key].
 function buildToggle(wrapId, options, key) {
   var wrap = el(wrapId);
   Object.keys(options).forEach(function (id) {
@@ -139,19 +152,26 @@ function buildToggle(wrapId, options, key) {
     b.innerHTML = ICONS[id] + "<span>" + options[id].label + "</span>";
     b.setAttribute("aria-pressed", String(id === state[key]));
     b.setAttribute("data-id", id);
-    b.addEventListener("click", function () {
-      state[key] = id;
-      Array.prototype.forEach.call(wrap.children, function (c, i) {
-        c.setAttribute("aria-pressed", String(Object.keys(options)[i] === id));
-      });
-      if (key === "mode") { prefetch(state.origin); prefetch(state.destination); }
-    });
+    b.setAttribute("data-key", key);
+    b.addEventListener("click", function () { choose(key, id); });
     wrap.appendChild(b);
   });
 }
 
+// The "All stops" switch on the map: every bus stop, bus stand, railway and
+// metro station in Kerala, or none.
+function buildStopsSwitch() {
+  var box = el("stops-toggle");
+  function show() { el("stops-key").hidden = !box.checked; }
+  box.checked = BASEMAP.stopsOn();
+  show();
+  box.addEventListener("change", function () { BASEMAP.showStops(box.checked); show(); });
+}
+
 function buildModes() {
+  buildStopsSwitch();
   buildToggle("modes", MODES, "mode");
+  buildToggle("mapmodes", MODES, "mode");     // the same choice, on the map
   // Walk or two-wheeler before planning; an Uber is offered on the planned
   // trip itself, once the rider can see how far the stop is.
   buildToggle("access", { walk: ACCESS.walk, two_wheeler: ACCESS.two_wheeler }, "access");

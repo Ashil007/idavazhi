@@ -49,6 +49,44 @@ var BASEMAP = (function () {
   // the sea reach 8 degrees out, past what any screen shows from here).
   var VIEW = [[AREA[0][0] - 6, AREA[0][1] - 6], [AREA[1][0] + 6, AREA[1][1] + 6]];
   var CREDIT_FOLD_MS = 5000;
+  // Every bus stop, bus stand, railway and metro station (tools/build_transit.py),
+  // drawn only while the rider has "All stops" switched on.
+  var STOPS_KEY = "vazhi-all-stops";
+  var stopsOn = false;
+  try { stopsOn = localStorage.getItem(STOPS_KEY) === "1"; } catch (e) { /* private window */ }
+  var STOP_COLORS = { bus: "#22a06b", stand: "#22a06b", rail: "#e8833a", metro: "#8b5cf6" };
+  var EMPTY = { type: "FeatureCollection", features: [] };
+
+  // Dots for every stop, then names as the map zooms in: stations first,
+  // bus stands next, bus stops last (there are 14,000 of them).
+  function stopLayers() {
+    var T = "transit";
+    function kindIs(k) { return ["==", ["get", "k"], k]; }
+    function dot(id, filter, minzoom, color, r0, r1, ring) {
+      return { id: id, type: "circle", source: T, minzoom: minzoom, filter: filter,
+               paint: { "circle-color": color,
+                        "circle-radius": ["interpolate", ["linear"], ["zoom"], minzoom, r0, 16, r1],
+                        "circle-stroke-color": C.halo,
+                        "circle-stroke-width": ring } };
+    }
+    function label(id, filter, minzoom, size, color) {
+      return { id: id, type: "symbol", source: T, minzoom: minzoom, filter: filter,
+               layout: { "text-field": ["coalesce", ["get", "n"], ""], "text-font": FONT_M, "text-size": size,
+                         "text-offset": [0, 0.9], "text-anchor": "top", "text-optional": true },
+               paint: { "text-color": color, "text-halo-color": C.halo, "text-halo-width": 1.5 } };
+    }
+    var station = ["match", ["get", "k"], ["rail", "metro"], true, false];
+    var stationColor = ["match", ["get", "k"], "metro", STOP_COLORS.metro, STOP_COLORS.rail];
+    return [
+      dot("stops-bus", kindIs("bus"), 10, STOP_COLORS.bus, 1.4, 5,
+          ["interpolate", ["linear"], ["zoom"], 12, 0, 14, 1]),
+      dot("stops-stand", kindIs("stand"), 8, STOP_COLORS.stand, 2.5, 8, 2),
+      dot("stops-station", station, 6, stationColor, 3, 9, 2),
+      label("stops-bus-name", kindIs("bus"), 15, 11, C.textSoft),
+      label("stops-stand-name", kindIs("stand"), 12, 12, C.text),
+      label("stops-station-name", station, 9, 12, stationColor)
+    ];
+  }
 
   function roadWidth(minor, major) {
     return ["interpolate", ["exponential", 1.6], ["zoom"], 8, minor * 0.3, 12, minor, 16, major, 19, major * 3];
@@ -79,9 +117,11 @@ var BASEMAP = (function () {
         own: { type: "vector", tiles: [origin + "/tiles/{z}/{x}/{y}.pbf"], minzoom: 0, maxzoom: 14,
                bounds: [AREA[0][1], AREA[0][0], AREA[1][1], AREA[1][0]] },
         sea: { type: "geojson", data: origin + "/map/sea.geojson" },
-        region: { type: "geojson", data: origin + "/map/region.geojson" }
+        region: { type: "geojson", data: origin + "/map/region.geojson" },
+        // The stop list is downloaded only once "All stops" is on.
+        transit: { type: "geojson", data: stopsOn ? origin + "/map/transit.geojson" : EMPTY }
       },
-      layers: [
+      layers: withStops([
         { id: "land", type: "background", paint: { "background-color": C.land } },
         { id: "wood", type: "fill", source: R, "source-layer": "landcover",
           filter: ["match", ["get", "class"], ["wood", "forest", "grass", "wetland"], true, false],
@@ -174,14 +214,29 @@ var BASEMAP = (function () {
                     "text-transform": dark ? ["step", ["zoom"], "uppercase", 10, "none"] : "none",
                     "text-letter-spacing": dark ? ["step", ["zoom"], 0.08, 10, 0.02] : 0 },
           paint: { "text-color": C.text, "text-halo-color": C.halo, "text-halo-width": 1.6 } }
-      ]
+      ])
     };
+  }
+
+  // With "All stops" on, the stop layers name the stations; the base map's
+  // own station names would print each one twice.
+  function withStops(layers) {
+    if (!stopsOn) return layers;
+    return layers.filter(function (l) { return l.id !== "station-name"; }).concat(stopLayers());
   }
 
   var layer = null;
 
   function restyle() {
     layer.getMaplibreMap().setStyle(style(window.location.origin));
+  }
+
+  // The "All stops" switch. The stop list (1.8 MB, about 220 KB gzipped) is
+  // downloaded the first time it is switched on.
+  function showStops(on) {
+    stopsOn = !!on;
+    try { localStorage.setItem(STOPS_KEY, stopsOn ? "1" : "0"); } catch (e) { /* not remembered */ }
+    if (layer) restyle();
   }
 
   var SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" ' +
@@ -224,9 +279,10 @@ var BASEMAP = (function () {
   // button after five seconds or when the map is first dragged; tapping the
   // (i) opens it again.
   function foldingCredit(map) {
-    // On a phone the bottom sheet covers the lower corners: top right, then.
+    // On a phone the bottom sheet covers the lower corners and the mode
+    // switch sits top right: under the zoom buttons, then.
     var phone = window.matchMedia("(max-width: 860px)");
-    function place() { map.attributionControl.setPosition(phone.matches ? "topright" : "bottomright"); }
+    function place() { map.attributionControl.setPosition(phone.matches ? "topleft" : "bottomright"); }
     place();
     if (phone.addEventListener) phone.addEventListener("change", place);
     var el = map.attributionControl.getContainer();
@@ -259,5 +315,6 @@ var BASEMAP = (function () {
     foldingCredit(map);
   }
 
-  return { init: init, theme: function () { return theme; } };
+  return { init: init, theme: function () { return theme; },
+           showStops: showStops, stopsOn: function () { return stopsOn; } };
 })();

@@ -77,6 +77,7 @@ opens and then folds into an (i) button.
 python tools/build_map.py           # Kerala extract -> .cache/map/kerala-<date>.mbtiles (tilemaker) + the sea
 python tools/build_sea.py           # just the sea, from the extract already downloaded
 python tools/build_region.py        # just the roads and cities around Kerala
+python tools/build_transit.py       # just the "All stops" layer (every stop and station)
 python tools/routing_server.py start  # your own Valhalla routing server on port 8002
 ```
 

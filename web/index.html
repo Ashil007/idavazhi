@@ -177,7 +177,23 @@
 
   <main class="map-wrap">
     <div id="map"></div>
-    <div class="legend" id="legend" hidden></div>
+    <div class="maptop">
+      <div class="mapmodes" id="mapmodes" role="group" aria-label="How are you travelling?"></div>
+      <div class="mapstops">
+        <label class="mapstops__row">
+          <span>All stops</span>
+          <input type="checkbox" id="stops-toggle" role="switch" />
+          <span class="mapstops__track" aria-hidden="true"></span>
+        </label>
+        <ul class="mapstops__key" id="stops-key" hidden>
+          <li><i style="background:#22a06b"></i>Bus stop</li>
+          <li><i class="big" style="background:#22a06b"></i>Bus stand</li>
+          <li><i class="big" style="background:#e8833a"></i>Railway station</li>
+          <li><i class="big" style="background:#8b5cf6"></i>Metro station</li>
+        </ul>
+      </div>
+      <div class="legend" id="legend" hidden></div>
+    </div>
   </main>
 </div>
 
