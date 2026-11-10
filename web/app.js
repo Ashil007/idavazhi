@@ -612,11 +612,13 @@ function renderPlan(plan, fit) {
   plan.legs.forEach(function (leg) {
     if (!leg.geometry || leg.geometry.length < 2) return;
     var isAccess = leg.type !== "transit";
+    // Each leg in its own style: with a two-wheeler the last stretch is a walk.
+    var own = ACCESS[leg.access] || access;
     L.polyline(leg.geometry, {
-      color: isAccess ? access.color : color,
+      color: isAccess ? own.color : color,
       weight: isAccess ? 4 : 6,
       opacity: isAccess ? 0.95 : 0.9,
-      dashArray: isAccess ? access.dash : null,
+      dashArray: isAccess ? own.dash : null,
       lineCap: "round",
       lineJoin: "round"
     }).addTo(routeLayer);
@@ -677,7 +679,7 @@ function renderPlan(plan, fit) {
     var li = document.createElement("li");
     li.className = "leg leg--" + leg.type;
     li.style.setProperty("--leg-color", leg.type === "transit" ? color :
-                         leg.type === "wait" ? "#7d8a9c" : access.color);
+                         leg.type === "wait" ? "#7d8a9c" : (ACCESS[leg.access] || access).color);
 
     var meta = leg.type === "wait" ? "Wait about " + fmtMin(leg.duration_s)
              : fmtKm(leg.distance_m) + " &middot; about " + fmtMin(leg.duration_s);
@@ -734,6 +736,8 @@ function renderPlan(plan, fit) {
   var legend = el("legend");
   legend.innerHTML =
     '<div><i style="background:' + access.color + '"></i> ' + access.noun + '</div>' +
+    (plan.access !== "walk" && plan.legs.some(function (l) { return l.access === "walk"; })
+      ? '<div><i style="background:' + ACCESS.walk.color + '"></i> ' + ACCESS.walk.noun + '</div>' : "") +
     '<div><i style="background:' + color + '"></i> ' + escapeHtml(plan.mode_label) + " line</div>";
   legend.hidden = false;
   STOPS.afterPlan(plan);   // riders renamed a stop on this trip? ask this rider

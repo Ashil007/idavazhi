@@ -847,6 +847,15 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
         # On foot (or two-wheeler) within reach; by bus or taxi beyond it.
         return m / access_mps if m <= own_reach else _road_leg_seconds(m)
 
+    # A two-wheeler is parked at the first station, so the far end is always
+    # a walk - or a bus or auto beyond walking range.
+    wcfg = access_config("walk")
+
+    def seconds_out(m):
+        if acfg["router"] == "foot":
+            return seconds(m)
+        return m / (wcfg["speed_kmh"] / 3.6) if m <= WALK_MAX_M else _road_leg_seconds(m)
+
     def candidates(point, inbound):
         near = []
         for s in served:
@@ -881,7 +890,7 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
     report("route", "Searching %s trains for the fastest connection"
            % format(len(tt.trains), ","))
     journeys = tt.search({c: seconds(m) for c, (m, _) in near_o.items()},
-                         {c: seconds(m) for c, (m, _) in near_d.items()})
+                         {c: seconds_out(m) for c, (m, _) in near_d.items()})
     if not journeys:
         raise PlanError(
             "No train runs between stations near these two places, directly or with "
@@ -926,9 +935,11 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
         first, last = rides[0]["from"], rides[-1]["to"]
         with ThreadPoolExecutor(max_workers=2) as pool:
             access_leg, egress_leg = pool.map(
-                lambda a: _tt_access_leg(access, acfg, *a, own_reach),
-                [(origin, (first["lat"], first["lon"]), first["name"], True),
-                 ((last["lat"], last["lon"]), destination, last["name"], False)])
+                lambda a: _tt_access_leg(*a),
+                [(access, acfg, origin, (first["lat"], first["lon"]), first["name"], True,
+                  own_reach),
+                 ("walk", wcfg, (last["lat"], last["lon"]), destination, last["name"], False,
+                  WALK_MAX_M)])
 
         legs = [access_leg]
         for n, ride in enumerate(rides):
@@ -1148,20 +1159,28 @@ def plan(origin, destination, mode, report=None, access="walk"):
     board_pt, alight_pt = (board["lat"], board["lon"]), (alight["lat"], alight["lon"])
     report("access", "Finding the shortest %s route to and from the %ss"
            % (acfg["label"].lower(), cfg["stop_noun"]))
+    # A two-wheeler stays parked at the first stop, so the last stretch is
+    # always on foot (or by bus or auto when it is too far to walk).
+    wcfg = access_config("walk")
     ends = [(origin, board_pt, "%s to %s" % (acfg["verb"], _stop_label(board, cfg))),
-            (alight_pt, destination, "%s to your destination" % acfg["verb"])]
+            (alight_pt, destination, "%s to your destination" % wcfg["verb"])]
     offroad = (bool(board.get("offroad")), bool(alight.get("offroad")))
-    access_leg, egress_leg = _access_legs(access, acfg, ends, report, offroad)
     if access == "walk":
-        # Nobody walks 4 km to a station when a bus or auto goes there:
-        # beyond a comfortable walk, show that instead.
-        legs = [access_leg, egress_leg]
-        for n, (a, b, _label) in enumerate(ends):
-            if legs[n]["distance_m"] > WALK_MAX_M and not legs[n].get("offroad"):
-                stop = board if n == 0 else alight
-                legs[n] = _tt_access_leg(access, acfg, a, b, _stop_label(stop, cfg),
-                                         n == 0, WALK_MAX_M, force_road=True)
-        access_leg, egress_leg = legs
+        access_leg, egress_leg = _access_legs(access, acfg, ends, report, offroad)
+    else:
+        access_leg, = _access_legs(access, acfg, ends[:1], report, offroad[:1])
+        egress_leg, = _access_legs("walk", wcfg, ends[1:], report, offroad[1:])
+    # Nobody walks 4 km to a station when a bus or auto goes there:
+    # beyond a comfortable walk, show that instead.
+    legs = [access_leg, egress_leg]
+    for n, (a, b, _label) in enumerate(ends):
+        if legs[n].get("access") != "walk":
+            continue
+        if legs[n]["distance_m"] > WALK_MAX_M and not legs[n].get("offroad"):
+            stop = board if n == 0 else alight
+            legs[n] = _tt_access_leg("walk", wcfg, a, b, _stop_label(stop, cfg),
+                                     n == 0, WALK_MAX_M, force_road=True)
+    access_leg, egress_leg = legs
 
     stops_passed = _intermediate_stops(all_stops, transit_coords, board, alight, cfg)
     # Each change costs a platform walk plus another wait for the next train.
