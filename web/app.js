@@ -425,7 +425,10 @@ function pushStatus(message, kind, stage) {
 
 /* ---------------------------------------------------------------- plan */
 
-function planJourney() {
+// `access` (optional): plan this one trip with another way to the first stop
+// - "cab" when the rider chose an Uber - without changing their usual choice.
+function planJourney(access) {
+  if (typeof access !== "string") access = state.access;
   if (state.planning) return;
   if (!state.mode) {
     NOTICE.show({ tone: "info", title: "How will you travel?",
@@ -456,7 +459,7 @@ function planJourney() {
     olat: state.origin.lat, olon: state.origin.lon,
     dlat: state.destination.lat, dlon: state.destination.lon,
     mode: state.mode,
-    access: state.access
+    access: access
   });
 
   var source = new EventSource("/api/plan?" + params.toString());
@@ -527,6 +530,9 @@ function toAction(a) {
     label: a.label,
     run: function () {
       if (a.mode) { var m = document.querySelector('#mapmodes [data-id="' + a.mode + '"]'); if (m) m.click(); }
+      // An Uber is for this trip only: the plan shows the cab ride to the
+      // stop with its "Book a ride" button. Walk / Two-wheeler stays as it was.
+      if (a.access === "cab") { planJourney("cab"); return; }
       if (a.access) { var x = document.querySelector('#mapaccess [data-id="' + a.access + '"]'); if (x) x.click(); }
       planJourney();
     }

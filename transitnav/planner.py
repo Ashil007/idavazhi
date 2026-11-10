@@ -69,6 +69,9 @@ class PlanError(RuntimeError):
 
 
 TWO_WHEELER = {"label": "Use a two-wheeler", "access": "two_wheeler"}
+# The two ways to a stop too far to walk to from the start.
+BOOK_UBER = {"label": "Book an Uber", "access": "cab"}
+OWN_TWO_WHEELER = {"label": "I'll use my own two-wheeler", "access": "two_wheeler"}
 TRY_BUS = {"label": "Try a bus", "mode": "bus"}
 
 
@@ -184,7 +187,14 @@ def _find_stops(origin, destination, cfg, acfg, report):
         closest = min(stops, key=lambda s: haversine(point[0], point[1], s["lat"], s["lon"]))
         far = haversine(point[0], point[1], closest["lat"], closest["lon"])
         actions = []
-        if acfg["router"] == "foot":
+        if not near_origin:
+            # Too far to walk to from the start: an Uber or the rider's own
+            # two-wheeler gets them to a farther stop.
+            if acfg["router"] != "car":
+                actions.append(BOOK_UBER)
+            if acfg["router"] == "foot":
+                actions.append(OWN_TWO_WHEELER)
+        elif acfg["router"] == "foot":
             actions.append(TWO_WHEELER)
         if cfg["vehicle"] != "bus":
             actions.append(TRY_BUS)
