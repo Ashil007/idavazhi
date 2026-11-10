@@ -495,6 +495,11 @@ def _driving(origin, destination):
     return found[1], found[2]
 
 
+def _leg_seconds(acfg, metres):
+    """Time for a walk or ride of `metres`; a cab adds the wait for it to arrive."""
+    return metres / (acfg["speed_kmh"] / 3.6) + acfg.get("pickup_wait_s", 0)
+
+
 def _access_leg_fast(access, acfg, start, end, label):
     """A walking or riding leg from the street router, or None."""
     found = router.route(start, end, acfg["router"], ACCESS_SNAP_RADIUS_M)
@@ -507,7 +512,7 @@ def _access_leg_fast(access, acfg, start, end, label):
         "label": label,
         "geometry": coords,
         "distance_m": metres,
-        "duration_s": metres / (acfg["speed_kmh"] / 3.6),
+        "duration_s": _leg_seconds(acfg, metres),
         "approximate": False,
     }
 
@@ -567,7 +572,7 @@ def _access_leg(graph, access, acfg, start, end, label):
         "label": label,
         "geometry": coords,
         "distance_m": metres,
-        "duration_s": metres / (acfg["speed_kmh"] / 3.6),
+        "duration_s": _leg_seconds(acfg, metres),
         "approximate": approximate,
     }
 
@@ -674,7 +679,7 @@ def _estimated_leg(access, acfg, start, end, label):
         "label": label,
         "geometry": [list(start), list(end)],
         "distance_m": metres,
-        "duration_s": metres / (acfg["speed_kmh"] / 3.6),
+        "duration_s": _leg_seconds(acfg, metres),
         "approximate": True,
         "estimated": True,
     }
@@ -741,6 +746,8 @@ AUTO_MAX_M = 15000          # up to here an auto-rickshaw is the obvious choice
 # bus or an auto-rickshaw. One rule for choosing stations and for the legs
 # shown, so the plan never picks a station on costs it then does not show.
 WALK_MAX_M = 2500
+# A cab is not worth booking for less than this; the stop is walked to instead.
+CAB_MIN_M = 800
 # How many route options a plan offers (the best plus alternatives).
 MAX_OPTIONS = 3
 # With a bus or auto for the first stretch, a metro or train station this far
@@ -784,7 +791,7 @@ def _tt_access_leg(access, acfg, start, end, station_name, outbound, own_reach_m
         "%s to your destination" % acfg["verb"])
     return {"type": "walk" if access == "walk" else "ride", "access": access, "label": label,
             "geometry": coords, "distance_m": metres,
-            "duration_s": metres / (acfg["speed_kmh"] / 3.6), "approximate": approximate}
+            "duration_s": _leg_seconds(acfg, metres), "approximate": approximate}
 
 
 def _clock(minutes: int) -> str:
@@ -838,6 +845,8 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
     # keeps the usual riding range.
     if acfg["router"] == "foot":
         own_reach = WALK_MAX_M
+    elif access == "cab":
+        own_reach = TT_ROAD_REACH_M     # a cab goes to any station in reach
     else:
         own_reach = cfg.get("max_access_m", MAX_WALK_TO_STOP_M) * acfg.get("reach_factor", 1.0)
     max_access = max(own_reach, TT_ROAD_REACH_M)
@@ -845,7 +854,7 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
 
     def seconds(m):
         # On foot (or two-wheeler) within reach; by bus or taxi beyond it.
-        return m / access_mps if m <= own_reach else _road_leg_seconds(m)
+        return _leg_seconds(acfg, m) if m <= own_reach else _road_leg_seconds(m)
 
     # A two-wheeler is parked at the first station, so the far end is always
     # a walk - or a bus or auto beyond walking range.
@@ -1181,6 +1190,12 @@ def plan(origin, destination, mode, report=None, access="walk"):
             legs[n] = _tt_access_leg("walk", wcfg, a, b, _stop_label(stop, cfg),
                                      n == 0, WALK_MAX_M, force_road=True)
     access_leg, egress_leg = legs
+    # Nobody books a cab for a few hundred metres: a stop that close is a walk.
+    short_cab = access == "cab" and access_leg.get("access") == "cab" and         access_leg["distance_m"] < CAB_MIN_M
+    if short_cab:
+        access_leg, = _access_legs("walk", wcfg, [
+            (origin, board_pt, "%s to %s" % (wcfg["verb"], _stop_label(board, cfg)))],
+            report, offroad[:1])
 
     stops_passed = _intermediate_stops(all_stops, transit_coords, board, alight, cfg)
     # Each change costs a platform walk plus another wait for the next train.
@@ -1214,6 +1229,8 @@ def plan(origin, destination, mode, report=None, access="walk"):
     total_s = sum(l["duration_s"] for l in legs)
 
     notes, warnings = [], []
+    if short_cab:
+        notes.append("The stop is only a short walk away, so no cab is needed.")
     car = _driving(origin, destination)
     if car is not None:
         notes.append("For comparison, driving straight there by car or taxi takes about "

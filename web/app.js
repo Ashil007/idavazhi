@@ -11,11 +11,13 @@ var MODES = {
 // access styles distinct from each other and from every vehicle line.
 var ACCESS = {
   walk:        { label: "Walk",        color: "#9fb3c8", dash: "1 9", noun: "On foot" },
-  two_wheeler: { label: "Two-wheeler", color: "#4fc3d9", dash: "8 8", noun: "By two-wheeler" }
+  two_wheeler: { label: "Two-wheeler", color: "#4fc3d9", dash: "8 8", noun: "By two-wheeler" },
+  cab:         { label: "Cab",         color: "#e7d36b", dash: "10 6", noun: "By cab" }
 };
 
 var ICONS = {
   walk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.5" r="1.8"/><path d="M12 8.5l-2 5.5 3 3 1 4.5M12 8.5l2.5 2.5 3 .5M12 8.5l-3.5 2-1 3M10 14l-2 3.5-2.5 1.5"/></svg>',
+  cab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v-4.5l-2-5H7l-2 5z"/><path d="M5 12.5h14M9.5 7.5l.5-2.5h4l.5 2.5"/><circle cx="8" cy="17.5" r="1.6"/><circle cx="16" cy="17.5" r="1.6"/></svg>',
   two_wheeler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="16.5" r="3"/><circle cx="18.5" cy="16.5" r="3"/><path d="M5.5 16.5h6.5l3-6.5h-4.5M15 10l1.2-3H19M16.2 7l2.3 9.5"/></svg>',
   bus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="3" width="16" height="13" rx="2"/><path d="M4 9h16M8 20v-2M16 20v-2"/><circle cx="8" cy="13" r="1.1" fill="currentColor" stroke="none"/><circle cx="16" cy="13" r="1.1" fill="currentColor" stroke="none"/></svg>',
   train: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M8 20l2-3M16 20l-2-3"/><circle cx="9" cy="13" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1.1" fill="currentColor" stroke="none"/></svg>',
@@ -590,6 +592,55 @@ function renderOptions(plan) {
   });
 }
 
+// Opens the Uber app (or m.uber.com without it) with the pickup and the
+// drop-off at the stop already filled in. Uber's universal link:
+// developer.uber.com/docs/riders/ride-requests/tutorials/deep-links
+function uberLink(plan, leg) {
+  var i = plan.legs.indexOf(leg);
+  var next = plan.legs.slice(i + 1).filter(function (l) { return l.type === "transit"; })[0];
+  var end = leg.geometry && leg.geometry.length ? leg.geometry[leg.geometry.length - 1] : null;
+  var stop = next && next.from && next.from.lat != null
+    ? { lat: next.from.lat, lon: next.from.lon, name: next.from.name }
+    : end ? { lat: end[0], lon: end[1], name: leg.label.replace(/^Cab to /, "") } : null;
+  if (!stop) return null;
+  var q = ["action=setPickup"];
+  var o = state.origin;
+  if (o && o.gps) {
+    q.push("pickup=my_location");
+  } else {
+    q.push("pickup[latitude]=" + plan.origin.lat.toFixed(6),
+           "pickup[longitude]=" + plan.origin.lon.toFixed(6));
+    var start = el("origin-input").value;
+    if (start && !/^Point on the map/.test(start)) {
+      q.push("pickup[nickname]=" + encodeURIComponent(start));
+    }
+  }
+  q.push("dropoff[latitude]=" + Number(stop.lat).toFixed(6),
+         "dropoff[longitude]=" + Number(stop.lon).toFixed(6));
+  if (stop.name) q.push("dropoff[nickname]=" + encodeURIComponent(stop.name));
+  return "https://m.uber.com/ul/?" + q.join("&");
+}
+
+function uberButton(plan, leg) {
+  var wrap = document.createElement("div");
+  wrap.className = "cab-book";
+  var href = uberLink(plan, leg);
+  if (!href) return wrap;
+  var a = document.createElement("a");
+  a.className = "cab-book__btn";
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.innerHTML = ICONS.cab + "<span>Book an Uber to this stop</span>";
+  var note = document.createElement("p");
+  note.className = "cab-book__note";
+  note.textContent = "Opens the Uber app with the pickup and drop-off filled in. " +
+                     "Check the fare there before you book.";
+  wrap.appendChild(a);
+  wrap.appendChild(note);
+  return wrap;
+}
+
 function renderPlan(plan, fit) {
   var color = plan.color;
   var access = ACCESS[plan.access] || ACCESS.walk;
@@ -707,6 +758,7 @@ function renderPlan(plan, fit) {
               }).join("") + "</ul></details>";
     }
     li.innerHTML = html;
+    if (leg.access === "cab") li.appendChild(uberButton(plan, leg));
     // Bus rides: the times riders have added for this stop and direction.
     if (plan.mode === "bus" && leg.type === "transit" && leg.from && leg.to) {
       var times = document.createElement("div");
@@ -841,6 +893,7 @@ function locateUser() {
     if (!state.origin) {
       setPoint("origin", here);
       el("origin-input").value = "Your location";
+      state.origin.gps = true;
     }
     setWhere("Showing <b>your location</b>" + (acc ? " (within about " + fmtKm(acc) + ")" : "") +
              ". It is set as your start; click the map to choose a destination.");

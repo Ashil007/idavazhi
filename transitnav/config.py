@@ -195,6 +195,30 @@ ACCESS_MODES = {
         # to a metro station is ordinary, a 10 km walk is not.
         "reach_factor": 3.0,
     },
+    # A taxi, auto-rickshaw or ride-hailing cab (the app offers to book it
+    # in Uber) to the first stop. Like a two-wheeler it is left behind, so
+    # the far end is a walk.
+    "cab": {
+        "label": "Cab",
+        "verb": "Cab",
+        "noun": "by cab",
+        "network_noun": "street",
+        "speed_kmh": 20.0,              # town traffic, stops and turns
+        "pickup_wait_s": 360,           # waiting for the cab to arrive
+        "filters": [
+            '["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|'
+            'living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|'
+            'tertiary_link)$"]',
+        ],
+        "exclude": [
+            '["highway"]["access"~"^(private|no)$"]',
+            '["highway"]["motor_vehicle"~"^(private|no)$"]',
+            '["highway"]["motorcar"~"^(private|no)$"]',
+        ],
+        "oneway_keys": ["oneway"],
+        "router": "car",
+        "reach_factor": 5.0,
+    },
 }
 ACCESS_MARGIN_MIN_M = 400
 ACCESS_MARGIN_MAX_M = 1500

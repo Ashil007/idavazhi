@@ -423,6 +423,14 @@ html, body {
 .leg__meta { font-size: 14px; color: var(--ink-faint); margin-top: 2px; }
 .leg__detail { font-size: 14px; color: var(--ink-dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
 .leg--wait { border-left-style: dotted; border-left-color: var(--leg-color); }
+.cab-book { margin-top: 10px; }
+.cab-book__btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 14px;
+  border-radius: 10px; background: #f1f3f6; color: #0b0d10; font-size: 15px; font-weight: 700; text-decoration: none;
+}
+.cab-book__btn:hover { background: #fff; }
+.cab-book__btn svg { width: 20px; height: 20px; flex: none; }
+.cab-book__note { margin: 6px 0 0; font-size: 13px; line-height: 1.4; color: var(--ink-faint); }
 
 .leg__stops {
   margin: 8px 0 0;
