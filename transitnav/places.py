@@ -519,55 +519,118 @@ def is_stale():
 
 # ----------------------------------------------------------------- search
 
-def _query(text):
+def _query(text, join=" AND "):
     """'lulu mal' -> 'lulu* AND mal*' (every word, as a prefix)."""
     words = re.findall(r"\w+", text.lower())
-    return " AND ".join('"%s"*' % w for w in words) if words else None
+    return join.join('"%s"*' % w for w in words) if words else None
 
 
-def _sound_query(text):
+def _sound_query(text, join=" AND "):
     """'kuthiyathodu' -> '"kutiatod"*': the typed words as they sound."""
     keys = [_sound(w) for w in re.findall(r"[A-Za-z]+", text)]
     keys = [k for k in keys if len(k) >= 2]
-    return " AND ".join('"%s"*' % k for k in keys) if keys else None
+    return join.join('"%s"*' % k for k in keys) if keys else None
+
+
+# What people add after a place name to say what sort of place they want:
+# "kuthiathode bus stop", "vyttila hub bust stop", "edappally jn". These words
+# are rarely part of the name in the map, so they are not required to match;
+# they lift places of that sort instead. Common typos are included.
+_BUS = r"(?:bus|buss|bust|bas|bs)"
+_STOP = r"(?:stop|stops|stopp|stp|sotp|stoop)"
+_HINTS = [
+    (re.compile(r"\b(?:%s\s*%s|%s|busstp|bustop|bustopp)\b" % (_BUS, _STOP, "busstop"), re.I),
+     ("Bus stop", "Bus stand")),
+    (re.compile(r"\b(?:%s\s*(?:stand|stnd|station)|busstand|ksrtc(?:\s*stand)?)\b" % _BUS, re.I),
+     ("Bus stand", "Bus stop")),
+    (re.compile(r"\b%s\b" % _STOP, re.I), ("Bus stop", "Bus stand")),
+    (re.compile(r"\b(?:junction|jn|jnc|jct|jun)\b\.?", re.I), ("junction",)),
+]
+
+
+def clean_query(text):
+    """Split what was typed into the place name and the sort of place wanted:
+    'north kuthiathode bust stop' -> ('north kuthiathode', {'Bus stop', ...})."""
+    core, kinds = text, set()
+    for pattern, wanted in _HINTS:
+        if pattern.search(core):
+            core = pattern.sub(" ", core)
+            kinds.update(wanted)
+    core = " ".join(core.split())
+    if not re.search(r"\w", core):
+        return text.strip(), set()                    # only "bus stop": search it as typed
+    return core, kinds
+
+
+def _covered(words, name, alt):
+    """Letters of the typed words found in the place's names, by spelling or
+    by sound, as a share of all typed letters (long words count most)."""
+    have = re.findall(r"[a-z0-9]+", (name + " " + (alt or "")).lower())
+    sounds = [_sound(h) for h in have]
+    got = 0
+    for w in words:
+        sw = _sound(w)
+        if any(h.startswith(w) for h in have) or (len(sw) >= 2 and any(s.startswith(sw) for s in sounds)):
+            got += len(w)
+    return got / max(1, sum(len(w) for w in words))
 
 
 def search(text, near=None, limit=8):
     """Best matches for what the user has typed so far, nearest and most
     useful first. `near` (lat, lon) is where the user is or is looking.
-    Exact spellings come first; other spellings of the same name follow."""
+    Exact spellings come first; other spellings of the same name follow.
+    Words like "bus stop" or "jn" lift places of that sort, and when no
+    place has every typed word, the places with most of them are shown."""
+    text, want = clean_query(text)
     q = _query(text)
     if not q or not os.path.exists(DB):
         return []
     db = sqlite3.connect("file:%s?mode=ro" % DB.replace("\\", "/"), uri=True)
     rows = {}
-    try:
-        for row in db.execute(
-                "SELECT p.id, p.name, p.kind, p.weight, p.lat, p.lon, p.near, "
-                "bm25(search, 10.0, 2.0, 1.0) "
-                "FROM search JOIN places p ON p.id = search.rowid "
-                "WHERE search MATCH ? ORDER BY bm25(search, 10.0, 2.0, 1.0) LIMIT 400", (q,)):
-            rows[row[0]] = row[1:] + (True,)
-        sq = _sound_query(text)
+    cols = "p.id, p.name, p.kind, p.weight, p.lat, p.lon, p.near, p.alt, "
+    words = re.findall(r"\w+", text.lower())
+
+    def run(sql, query, exact):
+        for row in db.execute(sql, (query,)):
+            rows.setdefault(row[0], row[1:] + (exact,))
+
+    def ask(join, exact_flag):
+        run("SELECT " + cols + "bm25(search, 10.0, 2.0, 1.0) "
+            "FROM search JOIN places p ON p.id = search.rowid "
+            "WHERE search MATCH ? ORDER BY bm25(search, 10.0, 2.0, 1.0) LIMIT 400",
+            _query(text, join), exact_flag)
+        sq = _sound_query(text, join)
         if sq:
             try:
-                for row in db.execute(
-                        "SELECT p.id, p.name, p.kind, p.weight, p.lat, p.lon, p.near, bm25(sound) "
-                        "FROM sound JOIN places p ON p.id = sound.rowid "
-                        "WHERE sound MATCH ? ORDER BY bm25(sound) LIMIT 400", (sq,)):
-                    rows.setdefault(row[0], row[1:] + (False,))
+                run("SELECT " + cols + "bm25(sound) "
+                    "FROM sound JOIN places p ON p.id = sound.rowid "
+                    "WHERE sound MATCH ? ORDER BY bm25(sound) LIMIT 400", sq, False)
             except sqlite3.OperationalError:
                 pass                                    # an index from before sound keys
+
+    try:
+        ask(" AND ", True)
+        if len(words) > 1 and len(rows) < limit:
+            ask(" OR ", False)                          # most of the words, if not all
     except sqlite3.OperationalError:
         return []
     finally:
         db.close()
-    typed = " ".join(re.findall(r"\w+", text.lower()))
+    typed = " ".join(words)
     styped = _sound_key(text)
     scored = []
-    for name, kind, weight, lat, lon, place_near, rank, exact in rows.values():
+    for name, kind, weight, lat, lon, place_near, alt, rank, exact in rows.values():
         low = name.lower()
         score = weight * 2.0 - rank                      # bm25: lower is better
+        if len(words) > 1:
+            share = _covered(words, name, alt)
+            if share < 0.5:
+                continue                                # matched only a small word
+            score -= 14 * (1 - share)                   # every word beats most words
+        if kind in want:
+            score += 10                                 # "bus stop" typed: bus stops first
+        elif "junction" in want and re.search(r"\b(?:junction|jn|jnc|jct)\b", low):
+            score += 10
         if low == typed:
             score += 20
         elif low.startswith(typed):

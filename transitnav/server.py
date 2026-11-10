@@ -132,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
         results = places.search(q, near=near, limit=8)
         if len(results) < 3 or (params.get("full") or ["0"])[0] == "1":
             try:
-                online = overpass.geocode(q, limit=6, near=near)
+                online = overpass.geocode(places.clean_query(q)[0] or q, limit=6, near=near)
             except Exception:  # noqa: BLE001 - offline: the local results stand
                 online = []
             for r in online:
