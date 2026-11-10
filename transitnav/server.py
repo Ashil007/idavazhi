@@ -222,6 +222,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._tile(route)
             elif route == "/api/whereami":
                 # Only used when the browser will not share its position.
+                # It looks up this server's own connection, which says
+                # nothing about a visitor coming through the tunnel or the
+                # cloud server's web server.
+                if self._client() != self.client_address[0]:
+                    self._json(503, {"error": "Allow location access to see where you are."})
+                    return
                 try:
                     self._json(200, locate.whereami())
                 except RuntimeError as exc:
@@ -326,10 +332,15 @@ class Handler(BaseHTTPRequestHandler):
     def _client(self):
         """Who is asking, for rate limits only (never stored). Through the
         phone-link tunnel every request arrives from this machine, and the
-        tunnel names the real client in CF-Connecting-IP."""
+        tunnel names the real client in CF-Connecting-IP; on the cloud server
+        the web server in front (Caddy) names it in X-Forwarded-For."""
         addr = self.client_address[0]
-        if addr in ("127.0.0.1", "::1") and self.headers.get("CF-Connecting-IP"):
-            return self.headers["CF-Connecting-IP"]
+        if addr in ("127.0.0.1", "::1"):
+            if self.headers.get("CF-Connecting-IP"):
+                return self.headers["CF-Connecting-IP"]
+            forwarded = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            if forwarded:
+                return forwarded
         return addr
 
     def _timings_post(self, route):
