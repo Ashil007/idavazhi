@@ -163,7 +163,7 @@ var ALERTS = (function () {
   /* The alarm distance, in large type: the choice in big numbers, and one
    * button per distance under it (the <select> behind them keeps the value). */
   var RING = {
-    auto: ["Auto", "", "2 km, or 4 minutes, before your stop", "Auto"],
+    auto: ["Default", "", "2 km, or 4 minutes, before your stop", "Default"],
     500: ["500", "m", "before your stop", "500 m"],
     1000: ["1", "km", "before your stop", "1 km"],
     2000: ["2", "km", "before your stop", "2 km"],

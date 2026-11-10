@@ -152,7 +152,9 @@ function buildToggle(wrapId, options, key) {
 
 function buildModes() {
   buildToggle("modes", MODES, "mode");
-  buildToggle("access", ACCESS, "access");
+  // Walk or two-wheeler before planning; an Uber is offered on the planned
+  // trip itself, once the rider can see how far the stop is.
+  buildToggle("access", { walk: ACCESS.walk, two_wheeler: ACCESS.two_wheeler }, "access");
 }
 
 document.querySelectorAll(".point").forEach(function (row) {
@@ -601,7 +603,7 @@ function uberLink(plan, leg) {
   var end = leg.geometry && leg.geometry.length ? leg.geometry[leg.geometry.length - 1] : null;
   var stop = next && next.from && next.from.lat != null
     ? { lat: next.from.lat, lon: next.from.lon, name: next.from.name }
-    : end ? { lat: end[0], lon: end[1], name: leg.label.replace(/^Cab to /, "") } : null;
+    : end ? { lat: end[0], lon: end[1], name: leg.label.replace(/^(Cab|Walk|Ride|Bus or auto-rickshaw|Bus or taxi) to /, "") } : null;
   if (!stop) return null;
   var q = ["action=setPickup"];
   var o = state.origin;
@@ -621,20 +623,43 @@ function uberLink(plan, leg) {
   return "https://m.uber.com/ul/?" + q.join("&");
 }
 
+// The first stretch of a trip (the walk or ride to the first stop) gets an
+// Uber button, so the rider can decide after seeing the plan. Not for a
+// stop a few steps away.
+var UBER_MIN_M = 300;
+function offersUber(plan, leg) {
+  var i = plan.legs.indexOf(leg);
+  if (i !== 0 || leg.type === "transit" || leg.type === "wait") return false;
+  if (leg.distance_m < UBER_MIN_M) return false;
+  return plan.legs.some(function (l) { return l.type === "transit"; });
+}
+
 function uberButton(plan, leg) {
   var wrap = document.createElement("div");
   wrap.className = "cab-book";
   var href = uberLink(plan, leg);
   if (!href) return wrap;
+  var next = plan.legs.filter(function (l) { return l.type === "transit"; })[0];
+  var stop = next && next.from && next.from.name;
+  if (leg.access !== "cab") {
+    // Rough car time for the same distance, so the choice is an informed one.
+    var mins = Math.max(3, Math.round(leg.distance_m / 1000 / 22 * 60));
+    var head = document.createElement("p");
+    head.className = "cab-book__head";
+    head.textContent = "Or take an Uber " + (stop ? "to " + stop + " " : "") +
+                       "— about " + mins + " min by car";
+    wrap.appendChild(head);
+  }
   var a = document.createElement("a");
   a.className = "cab-book__btn";
   a.href = href;
   a.target = "_blank";
   a.rel = "noopener";
-  a.innerHTML = ICONS.cab + "<span>Book an Uber to this stop</span>";
+  a.innerHTML = '<span class="cab-book__brand">Uber</span><span>Book a ride to ' +
+                escapeHtml(stop || "this stop") + "</span>";
   var note = document.createElement("p");
   note.className = "cab-book__note";
-  note.textContent = "Opens the Uber app with the pickup and drop-off filled in. " +
+  note.textContent = "Opens the Uber app with your pickup and this stop filled in. " +
                      "Check the fare there before you book.";
   wrap.appendChild(a);
   wrap.appendChild(note);
@@ -758,7 +783,7 @@ function renderPlan(plan, fit) {
               }).join("") + "</ul></details>";
     }
     li.innerHTML = html;
-    if (leg.access === "cab") li.appendChild(uberButton(plan, leg));
+    if (leg.access === "cab" || offersUber(plan, leg)) li.appendChild(uberButton(plan, leg));
     // Bus rides: the times riders have added for this stop and direction.
     if (plan.mode === "bus" && leg.type === "transit" && leg.from && leg.to) {
       var times = document.createElement("div");

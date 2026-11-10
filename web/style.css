@@ -429,7 +429,8 @@ html, body {
   border-radius: 10px; background: #f1f3f6; color: #0b0d10; font-size: 15px; font-weight: 700; text-decoration: none;
 }
 .cab-book__btn:hover { background: #fff; }
-.cab-book__btn svg { width: 20px; height: 20px; flex: none; }
+.cab-book__head { margin: 0 0 8px; font-size: 14px; color: var(--ink-dim); }
+.cab-book__brand { padding: 2px 7px; border-radius: 6px; background: #0b0d10; color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .01em; }
 .cab-book__note { margin: 6px 0 0; font-size: 13px; line-height: 1.4; color: var(--ink-faint); }
 
 .leg__stops {
@@ -855,8 +856,8 @@ html, body {
 }
 .ring__label { font-size: 17px; font-weight: 700; color: var(--ink); }
 .ring__value { margin: 6px 0 0; line-height: 1; color: #f5b642; font-variant-numeric: tabular-nums; }
-.ring__value b { font-size: 60px; font-weight: 800; letter-spacing: -.03em; }
-.ring__value span { margin-left: 6px; font-size: 28px; font-weight: 700; }
+.ring__value b { font-size: 40px; font-weight: 800; letter-spacing: -.02em; }
+.ring__value span { margin-left: 5px; font-size: 20px; font-weight: 700; }
 .ring__sub { margin: 8px 0 14px; font-size: 17px; color: var(--ink-dim); }
 .ring__chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .ring__chip {
