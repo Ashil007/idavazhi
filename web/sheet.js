@@ -14,11 +14,21 @@ var SHEET = (function () {
   var phone = window.matchMedia("(max-width: 860px)");
   var PEEK_PX = 168;            // the handle and the two search boxes
   var HALF = 0.4;               // share of the screen at the middle height
+  var FORM = 1 / 3;             // "form": at least this much, down to Plan journey
   var panel = null, state = "half";
 
   function shown(s) {
     var full = panel.offsetHeight;
     if (s === "peek") return Math.min(PEEK_PX, full);
+    if (s === "form") {
+      // Down to the "Plan journey" button, and at least a third of the screen.
+      var plan = document.getElementById("plan"), need = 0;
+      if (plan && plan.offsetParent) {
+        need = plan.getBoundingClientRect().bottom - panel.getBoundingClientRect().top +
+               panel.scrollTop + 16;
+      }
+      return Math.min(Math.max(Math.round(window.innerHeight * FORM), need), full);
+    }
     if (s === "half") return Math.min(Math.round(window.innerHeight * HALF), full);
     return full;
   }
@@ -80,7 +90,7 @@ var SHEET = (function () {
       panel.classList.remove("is-dragging");
       if (moved < 6) {
         // A tap: step up, and from the top back down to peek.
-        set(state === "peek" ? "half" : state === "half" ? "full" : "peek");
+        set(state === "peek" ? "half" : state === "half" || state === "form" ? "full" : "peek");
         return;
       }
       var offset = startOffset + (e.clientY - startY);
@@ -110,6 +120,13 @@ var SHEET = (function () {
     covered: covered,
     fitOptions: fitOptions,
     set: function (s) { if (panel && phone.matches) set(s); else state = s; },
+    // Phones: bring the search boxes and "Plan journey" into view, unless
+    // the sheet already shows at least that much.
+    showForm: function () {
+      if (!panel || !phone.matches) return;
+      panel.scrollTop = 0;
+      if (shown(state) < shown("form")) set("form");
+    },
     isPhone: function () { return phone.matches; }
   };
 })();

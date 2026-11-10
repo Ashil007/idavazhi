@@ -129,6 +129,7 @@ function setActive(role) {
 map.on("click", function (e) {
   if (STOPS.onMapClick(e.latlng)) return;     // placing a missing bus stop
   setPoint(state.active, e.latlng);
+  SHEET.showForm();   // phones: the sheet rises so "Plan journey" is in view
 });
 
 /* ---------------------------------------------------------------- modes */
