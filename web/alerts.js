@@ -4,10 +4,12 @@
  * follows their position (or, in demo mode, a pretend position moving along
  * the route) and, for every place they must get off - a change of train or
  * the final stop:
- *   - well before it (WAKE_M, or the distance the rider picked): a loud alarm
- *     that repeats until "I'm awake" is tapped, with vibration and a
- *     notification - the passenger may be asleep;
- *   - on arrival (ARRIVE_M): "this is your stop", notification and vibration.
+ *   - well before it (WAKE_M, or the distance the rider picked): a real
+ *     alarm - a looping alarm-clock sound and vibration that go on until
+ *     "I'm awake" is tapped, and a notification - the passenger may be asleep;
+ *   - on arrival (ARRIVE_M): "this is your stop". It rings like the first
+ *     alarm until tapped if that one was never answered; after "I'm awake"
+ *     it is a short chime.
  *
  * A web page can only do this while it is open; the screen is kept on while
  * tracking, because phones pause hidden pages.
@@ -24,6 +26,8 @@ var ALERTS = (function () {
   var watchId = null, simTimer = null, running = false, simulating = false;
   var last = null, speed = null;                  // previous fix and m/s
   var meLayer = null, audio = null, beepTimer = null, wakeLock = null, swReg = null;
+  var siren = null;        // the looping alarm sound (an <audio> element)
+  var awake = false;       // the rider tapped "I'm awake" during this ride
 
   var el = function (id) { return document.getElementById(id); };
 
@@ -136,6 +140,84 @@ var ALERTS = (function () {
     });
   }
 
+  // The alarm sound: "beep-beep-beep-beep", a pause, over and over, like an
+  // alarm clock. Made here as a WAV file and played by an <audio> element
+  // on loop, which keeps sounding while the phone is busy or the page is in
+  // the background, where beeps timed by the page get delayed or dropped.
+  function alarmTone() {
+    var rate = 22050, secs = 1.4, n = Math.floor(rate * secs);
+    var buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    function str(o, t) { for (var i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); }
+    str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE");
+    str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, "data"); v.setUint32(40, n * 2, true);
+    for (var i = 0; i < n; i++) {
+      var t = i / rate, k = Math.floor(t / 0.16), u = t - k * 0.16, x = 0;
+      if (k < 4 && u < 0.11) {
+        var env = Math.min(1, u / 0.005, (0.11 - u) / 0.005);
+        var w = 2 * Math.PI * 1760 * t;      // high and piercing, with harmonics
+        x = env * (0.62 * Math.sin(w) + 0.25 * Math.sin(3 * w) + 0.13 * Math.sin(5 * w));
+      }
+      v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, x)) * 32000, true);
+    }
+    return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  }
+
+  function ensureSiren() {
+    if (!siren && typeof Audio !== "undefined") {
+      siren = new Audio(alarmTone());
+      siren.loop = true;
+      siren.preload = "auto";
+    }
+    return siren;
+  }
+
+  // Phones only let a page play sound it was allowed to start from a tap:
+  // play the alarm muted for a moment in the tap that starts the trip.
+  function unlockSiren() {
+    var s = ensureSiren();
+    if (!s) return;
+    s.muted = true;
+    var done = function () { if (!ringing) { s.pause(); s.currentTime = 0; } s.muted = false; };
+    var p = s.play();
+    if (p && p.then) p.then(done, function () { s.muted = false; }); else done();
+  }
+
+  var ringing = false;
+
+  // Ring until silence(): the looping sound (or, if the browser will not
+  // play it, the page's own beeps), with vibration, over and over.
+  function ring() {
+    stopRinging();
+    ringing = true;
+    vibrate([700, 300, 700, 300, 1200]);
+    var s = silent() ? null : ensureSiren();
+    var beepToo = !s;
+    if (s) {
+      s.muted = false;
+      s.volume = 1;
+      s.currentTime = 0;
+      var p = s.play();
+      if (p && p.catch) p.catch(function () { beepToo = true; if (ringing && !silent()) beep(); });
+    } else if (!silent()) {
+      beep();
+    }
+    beepTimer = setInterval(function () {
+      if (beepToo && !silent()) beep();
+      vibrate([700, 300, 700]);
+    }, 1400);
+  }
+
+  function stopRinging() {
+    ringing = false;
+    clearInterval(beepTimer);
+    beepTimer = null;
+    if (siren) { siren.pause(); siren.currentTime = 0; }
+    if (navigator.vibrate) navigator.vibrate(0);
+  }
+
   function vibrate(pattern) {
     if (navigator.vibrate) navigator.vibrate(pattern);
   }
@@ -143,7 +225,7 @@ var ALERTS = (function () {
   function notify(title, body) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
     var opts = { body: body, tag: "vazhi-trip", renotify: true, requireInteraction: true,
-                 vibrate: [500, 200, 500, 200, 900] };
+                 vibrate: [500, 200, 500, 200, 900], silent: false };
     // Android shows notifications only through a service worker.
     if (swReg && swReg.showNotification) swReg.showNotification(title, opts);
     else { try { new Notification(title, opts); } catch (e) { /* not allowed here */ } }
@@ -151,26 +233,24 @@ var ALERTS = (function () {
 
   function silent() { return !!(el("trip-silent") && el("trip-silent").checked); }
 
-  // The full-screen alarm: loud ones beep and buzz until "I'm awake"
-  // (only buzz, with "Silent" ticked - for a quiet bus or a sleeping baby).
+  // The full-screen alarm. Loud ones ring until "I'm awake" (only buzz,
+  // with "Vibrate only" on - for a quiet bus or a sleeping baby); the rest
+  // chime once.
   function alarm(title, body, loud) {
     el("alarm-title").textContent = title;
     el("alarm-body").textContent = body;
     el("alarm").hidden = false;
     el("alarm").classList.toggle("is-loud", !!loud);
     notify(title, body);
-    vibrate(loud ? [600, 250, 600, 250, 1200] : [300, 150, 300]);
-    clearInterval(beepTimer);
+    if (loud) { ring(); return; }
+    stopRinging();
+    vibrate([300, 150, 300]);
     if (!silent()) beep();
-    if (loud) {
-      beepTimer = setInterval(function () { if (!silent()) beep(); vibrate([600, 250, 600]); }, 1600);
-    }
   }
 
   function silence() {
-    clearInterval(beepTimer);
-    beepTimer = null;
-    if (navigator.vibrate) navigator.vibrate(0);
+    stopRinging();
+    awake = true;
     el("alarm").hidden = true;
     if (targets.length && fired[(targets.length - 1) + ":arrive"]) stop("You have arrived. Trip alerts are off.");
   }
@@ -272,10 +352,13 @@ var ALERTS = (function () {
 
     if (dist <= ARRIVE_M && !fired[i + ":arrive"]) {
       fired[i + ":arrive"] = fired[i + ":wake"] = true;
-      if (t.final) alarm("This is your stop", "Get off at " + t.name + ".", false);
-      else alarm("Change here", "Get off at " + t.name + " and change to " + t.nextLabel + ".", false);
+      // Still asleep (the first alarm never answered): ring until tapped.
+      if (t.final) alarm("This is your stop", "Get off at " + t.name + ".", !awake);
+      else alarm("Change here", "Get off at " + t.name + " and change to " + t.nextLabel + ".", !awake);
+      awake = false;   // the next ride may be slept through too
     } else if (dist <= wakeAt && !fired[i + ":wake"]) {
       fired[i + ":wake"] = true;
+      awake = false;   // until "I'm awake" is tapped for this alarm
       alarm(t.final ? "Wake up — your stop is coming" : "Wake up — you change soon",
             t.name + " is " + fmtDist(dist) + " away" +
             (secs ? ", about " + Math.max(1, Math.round(secs / 60)) + " min" : "") +
@@ -309,6 +392,7 @@ var ALERTS = (function () {
 
   function prepare() {
     ensureAudio();                      // must start inside the tap that began the trip
+    unlockSiren();
     if ("serviceWorker" in navigator && !swReg) {
       navigator.serviceWorker.register("sw.js").then(function (r) { swReg = r; })
         .catch(function () { /* notifications fall back to the page */ });
@@ -330,6 +414,7 @@ var ALERTS = (function () {
   function begin() {
     targets = targetsOf(plan);
     fired = {};
+    awake = false;
     last = null;
     speed = null;
     running = true;
@@ -412,8 +497,7 @@ var ALERTS = (function () {
     watchId = null;
     clearInterval(simTimer);
     simTimer = null;
-    clearInterval(beepTimer);
-    beepTimer = null;
+    stopRinging();
     if (wakeLock) { wakeLock.release(); wakeLock = null; }
     if (meLayer) meLayer.clearLayers();
     el("trip-start").hidden = false;
