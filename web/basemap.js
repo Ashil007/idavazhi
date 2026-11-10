@@ -1,8 +1,9 @@
-/* The base map: deliberately plain, like a delivery app's map.
+/* The base map: a night-mode map by default - near-black land, quiet grey
+ * roads and a few labels - so the trip's own colours stand out. A switch on
+ * the map turns on the plain light map instead; the choice is remembered.
  *
- * One style of our own (below): soft land, light-blue water, white roads,
- * a few labels. It draws OpenStreetMap vector tiles in the OpenMapTiles
- * layout from two places:
+ * One style of our own (below), in two palettes. It draws OpenStreetMap
+ * vector tiles in the OpenMapTiles layout from two places:
  *   - OpenFreeMap (free, no key) for the whole world - and always for land,
  *     sea and parks, since the coastline needs data an extract lacks;
  *   - the app's own tiles for Kerala (tools/build_map.py builds them from an
@@ -17,12 +18,26 @@ var BASEMAP = (function () {
   // English names first: Kerala's main "name" is often Malayalam, which the
   // fonts here do not carry.
   var NAME = ["coalesce", ["get", "name_en"], ["get", "name:latin"], ["get", "name"]];
-  var C = {
-    land: "#f4f3ef", water: "#cfe3f1", park: "#e2eedb", wood: "#e7eee0",
-    building: "#ebe8e3", road: "#ffffff", casing: "#e1ddd5",
-    major: "#fdebb8", majorCasing: "#efd58f", rail: "#cbc6bd",
-    text: "#3f4247", textSoft: "#80848b", halo: "#ffffff", boundary: "#bdb7cc"
+  var PALETTES = {
+    light: {
+      land: "#f4f3ef", water: "#cfe3f1", park: "#e2eedb", wood: "#e7eee0",
+      building: "#ebe8e3", road: "#ffffff", casing: "#e1ddd5",
+      major: "#fdebb8", majorCasing: "#efd58f", rail: "#cbc6bd",
+      text: "#3f4247", textSoft: "#80848b", halo: "#ffffff", boundary: "#bdb7cc",
+      station: "#6c5dd3"
+    },
+    dark: {
+      land: "#121316", water: "#1f2227", park: "#151a17", wood: "#141816",
+      building: "#1c1e22", road: "#30343b", casing: "#191b1f",
+      major: "#4f5560", majorCasing: "#22252a", rail: "#46423d",
+      text: "#959aa3", textSoft: "#686d76", halo: "#0d0e10", boundary: "#34373e",
+      station: "#b4a8ff"
+    }
   };
+  var THEME_KEY = "vazhi-map-theme";
+  var theme = "dark";
+  try { if (localStorage.getItem(THEME_KEY) === "light") theme = "light"; } catch (e) { /* private window */ }
+  var C = PALETTES[theme];
   var ATTR = '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> ' +
              '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors';
 
@@ -46,6 +61,8 @@ var BASEMAP = (function () {
 
   // `roads` is "own" (this computer's Kerala tiles) or "base" (OpenFreeMap).
   function style(roads, origin) {
+    C = PALETTES[theme];
+    var dark = theme === "dark";
     var sources = { base: { type: "vector", url: "https://tiles.openfreemap.org/planet" } };
     if (roads === "own") {
       sources.own = { type: "vector", tiles: [origin + "/tiles/{z}/{x}/{y}.pbf"], minzoom: 0, maxzoom: 14 };
@@ -74,7 +91,7 @@ var BASEMAP = (function () {
         { id: "rail", type: "line", source: R, "source-layer": "transportation", minzoom: 10,
           filter: ["match", ["get", "class"], ["rail", "transit"], true, false],
           paint: { "line-color": C.rail, "line-width": 1.2, "line-dasharray": [4, 3] } },
-        // Roads: a light casing under a white (soft yellow for main roads) fill.
+        // Roads: a casing under the fill (main roads stand out a little).
         { id: "road-casing", type: "line", source: R, "source-layer": "transportation", minzoom: 11,
           filter: ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary", "minor"], true, false],
           layout: { "line-cap": "round", "line-join": "round" },
@@ -100,15 +117,18 @@ var BASEMAP = (function () {
           filter: ["any", ["==", ["get", "class"], "railway"],
                    ["==", ["get", "subclass"], "bus_station"]],
           layout: { "text-field": NAME, "text-font": FONT_M, "text-size": 11, "text-offset": [0, 0.6] },
-          paint: { "text-color": "#6c5dd3", "text-halo-color": C.halo, "text-halo-width": 1.4 } },
+          paint: { "text-color": C.station, "text-halo-color": C.halo, "text-halo-width": 1.4 } },
         { id: "place-small", type: "symbol", source: R, "source-layer": "place", minzoom: 11,
           filter: ["match", ["get", "class"], ["suburb", "neighbourhood", "quarter", "village", "hamlet"], true, false],
           layout: { "text-field": NAME, "text-font": FONT_R, "text-size": 12 },
           paint: { "text-color": C.textSoft, "text-halo-color": C.halo, "text-halo-width": 1.5 } },
+        // Towns: spaced-out capitals on the dark map when zoomed out.
         { id: "place-town", type: "symbol", source: "base", "source-layer": "place", minzoom: 3,
           filter: ["match", ["get", "class"], ["city", "town"], true, false],
           layout: { "text-field": NAME, "text-font": FONT_M,
-                    "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 12, 15] },
+                    "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 12, 15],
+                    "text-transform": dark ? ["step", ["zoom"], "uppercase", 10, "none"] : "none",
+                    "text-letter-spacing": dark ? ["step", ["zoom"], 0.08, 10, 0.02] : 0 },
           paint: { "text-color": C.text, "text-halo-color": C.halo, "text-halo-width": 1.6 } },
         { id: "place-state", type: "symbol", source: "base", "source-layer": "place", maxzoom: 7,
           filter: ["match", ["get", "class"], ["state", "country"], true, false],
@@ -121,11 +141,41 @@ var BASEMAP = (function () {
 
   var layer = null, ownBounds = null, using = null;
 
-  function pick(map) {
+  function pick(map, force) {
     var want = ownBounds && ownBounds.contains(map.getCenter()) && map.getZoom() >= 8 ? "own" : "base";
-    if (want === using) return;
+    if (want === using && !force) return;
     using = want;
     layer.getMaplibreMap().setStyle(style(want, window.location.origin));
+  }
+
+  // The light / dark switch, under the zoom buttons.
+  function themeControl(map) {
+    var Ctl = L.Control.extend({
+      options: { position: "topleft" },
+      onAdd: function () {
+        var box = L.DomUtil.create("div", "leaflet-bar map-theme");
+        var btn = L.DomUtil.create("a", "", box);
+        btn.href = "#";
+        btn.setAttribute("role", "button");
+        function show() {
+          btn.textContent = theme === "dark" ? "☀" : "☾";   // sun / moon
+          btn.title = theme === "dark" ? "Light map" : "Dark map";
+          btn.setAttribute("aria-label", btn.title);
+          document.documentElement.setAttribute("data-map-theme", theme);
+        }
+        show();
+        L.DomEvent.disableClickPropagation(box);
+        L.DomEvent.on(btn, "click", function (e) {
+          L.DomEvent.preventDefault(e);
+          theme = theme === "dark" ? "light" : "dark";
+          try { localStorage.setItem(THEME_KEY, theme); } catch (err) { /* not remembered */ }
+          show();
+          pick(map, true);
+        });
+        return box;
+      }
+    });
+    new Ctl().addTo(map);
   }
 
   function init(map) {
@@ -136,6 +186,7 @@ var BASEMAP = (function () {
     }
     using = "base";
     layer = L.maplibreGL({ style: style("base", window.location.origin), attribution: ATTR }).addTo(map);
+    themeControl(map);
     fetch("/api/mapinfo").then(function (r) { return r.json(); }).then(function (info) {
       if (!info.available) return;
       var b = info.bounds;   // [west, south, east, north]
@@ -145,5 +196,6 @@ var BASEMAP = (function () {
     }).catch(function () { /* OpenFreeMap alone, then */ });
   }
 
-  return { init: init, usingOwnTiles: function () { return using === "own"; } };
+  return { init: init, usingOwnTiles: function () { return using === "own"; },
+           theme: function () { return theme; } };
 })();

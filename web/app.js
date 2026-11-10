@@ -36,9 +36,9 @@ var el = function (id) { return document.getElementById(id); };
 
 /* ------------------------------------------------------------------ map */
 
-// All of India until the user's location (or district) is known.
+// All of Kerala until the user's location (or district) is known.
 var map = L.map("map", { zoomControl: true, attributionControl: true })
-  .setView([22.6, 79.0], 5);
+  .fitBounds([[8.2, 74.85], [12.8, 77.45]]);
 
 // A plain, delivery-app style base map (see basemap.js).
 BASEMAP.init(map);
