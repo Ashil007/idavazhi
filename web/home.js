@@ -143,4 +143,23 @@
     }, { rootMargin: "-30% 0px -60% 0px" });
     document.querySelectorAll(".chapter").forEach(function (c) { spy.observe(c); });
   }
+
+  // The three-bar menu on phones: open and close it; a tap on a section,
+  // outside it, or Escape closes it.
+  var menuBtn = $("nav-menu"), drop = $("nav-drop");
+  if (menuBtn && drop) {
+    var setMenu = function (open) {
+      drop.hidden = !open;
+      menuBtn.setAttribute("aria-expanded", String(open));
+      menuBtn.setAttribute("aria-label", open ? "Close menu" : "Menu");
+    };
+    menuBtn.addEventListener("click", function () { setMenu(drop.hidden); });
+    drop.addEventListener("click", function (e) { if (e.target.closest("a")) setMenu(false); });
+    document.addEventListener("click", function (e) {
+      if (!drop.hidden && !e.target.closest("#nav")) setMenu(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !drop.hidden) { setMenu(false); menuBtn.focus(); }
+    });
+  }
 })();

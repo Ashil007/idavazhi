@@ -25,7 +25,7 @@
   <div class="wrap nav__in">
     <a class="logo" href="#top" aria-label="Vazhi home">
       <img src="icons/icon-192.png" alt="" width="36" height="36" />
-      <span>Vazhi <span class="ml" lang="ml">വഴി</span></span>
+      <span class="ml" lang="ml">വഴി</span>
     </a>
     <nav class="nav__links" aria-label="Sections">
       <a href="#why">Why Vazhi</a>
@@ -36,7 +36,22 @@
       <a href="#faq">Questions</a>
     </nav>
     <a class="btn btn--small btn--main" href="/app">Open Vazhi</a>
+    <button type="button" class="nav__menu" id="nav-menu" aria-label="Menu" aria-expanded="false" aria-controls="nav-drop">
+      <span></span><span></span><span></span>
+    </button>
   </div>
+  <!-- Phones and tablets: the sections behind the three-bar button. -->
+  <nav class="nav__drop" id="nav-drop" aria-label="Sections" hidden>
+    <div class="wrap">
+      <a href="#why">Why Vazhi</a>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#guide">Full guide</a>
+      <a href="#get">Get the app</a>
+      <a href="#how-install">How to install</a>
+      <a href="#faq">Questions</a>
+    </div>
+  </nav>
 </header>
 
 <main id="main">
@@ -561,7 +576,7 @@
 <footer class="footer">
   <div class="wrap footer__in">
     <div class="footer__brand">
-      <a class="logo" href="#top"><img src="icons/icon-192.png" alt="" width="32" height="32" /><span>Vazhi <span class="ml" lang="ml">വഴി</span></span></a>
+      <a class="logo" href="#top"><img src="icons/icon-192.png" alt="" width="32" height="32" /><span class="ml" lang="ml">വഴി</span><span class="sr-only">Vazhi</span></a>
       <p>Bus, train and metro across Kerala, with an alarm before your stop. Made in Kerala.</p>
     </div>
     <nav class="footer__links" aria-label="Footer">
