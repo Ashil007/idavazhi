@@ -316,10 +316,6 @@ html, body {
 }
 
 .plan:hover { background: #ffc65a; box-shadow: 0 10px 34px rgba(245, 182, 66, .38); }
-/* Once a trip is planned, waking you before the stop is the main thing:
-   planning again becomes a quiet button. */
-.panel.has-result .plan { background: var(--panel-2); color: var(--ink); box-shadow: none; }
-.panel.has-result .plan:hover { background: var(--panel-3); }
 .plan:disabled { opacity: .5; cursor: progress; }
 
 /* Secondary: a soft raised button, readable text, no outline. */

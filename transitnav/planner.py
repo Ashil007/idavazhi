@@ -1055,8 +1055,8 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
                          "estimate.")
         warnings.append({
             "title": "Check your train before you go",
-            "text": "These train times are from an old (2016) timetable, and some trains "
-                    "do not run every day. Check the train on IRCTC or NTES first."})
+            "text": "Train times can change and some trains do not run every day. "
+                    "Check your train on IRCTC or NTES before you go."})
         notes.append("The total time starts when the first train leaves.")
 
         names = [r["train"]["number"] + " " + r["train"]["name"] for r in rides]
