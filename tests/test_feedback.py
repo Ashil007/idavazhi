@@ -43,6 +43,21 @@ class FeedbackTest(unittest.TestCase):
             feedback.add({"text": "x" * (feedback.MAX_TEXT + 1)}, "1.2.3.4")
         self.assertEqual(self.rows(), [])
 
+    def test_trip_rating_needs_no_words(self):
+        feedback.add({"rating": 4, "page": "trip"}, "1.2.3.4")
+        feedback.add({"rating": 5, "text": "Woke me right on time"}, "1.2.3.4")
+        for bad in (0, 6, "5", True, 4.5):
+            with self.assertRaises(feedback.FeedbackError):
+                feedback.add({"rating": bad}, "1.2.3.4")
+        self.assertEqual([r[0] for r in self.rows()], ["", "Woke me right on time"])
+        sent = []
+        env = {"VAZHI_TELEGRAM_TOKEN": "t", "VAZHI_TELEGRAM_CHAT": "42"}
+        with mock.patch.dict(os.environ, env), \
+                mock.patch.object(feedback, "_telegram", lambda tok, chat, text: sent.append(text) or True):
+            feedback.send_waiting()
+        self.assertIn("\u2605\u2605\u2605\u2605\u2606 4/5", sent[0])
+        self.assertIn("Woke me right on time", sent[1])
+
     def test_rate_limited(self):
         allowed = limits.LIMITS["feedback"][0]
         for i in range(allowed):

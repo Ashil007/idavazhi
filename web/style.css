@@ -35,7 +35,7 @@
   --i-bell: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E");
   --i-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v11'/%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3Cpath d='M5 20h14'/%3E%3C/svg%3E");
   --i-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 5 5L20 7'/%3E%3C/svg%3E");
-  --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --ml: "Noto Sans Malayalam", "Nirmala UI", "Kartika", sans-serif;
   color-scheme: dark;
 }
@@ -846,8 +846,9 @@ html, body {
   .panel__head { order: 11; margin-top: 22px; }
   .offline { order: 12; }
   .addstop-btn { order: 13; }
-  .about-row { order: 13; }
+  .ticket-btn { order: 13; }
   .panel__foot { order: 14; }
+  .about-btn { order: 15; }
   /* The boxes and buttons explain themselves; their titles cost a line each. */
   #points-block .block__title { display: none; }
   #points-block .hint { display: none; }
@@ -1088,12 +1089,10 @@ html, body {
 @media (max-width: 860px) and (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
 
 /* ------------------------------------------------------------------ about
-   About Vazhi (about.js): the story, a message box, "Buy me a bus ticket".
+   About Vazhi, Buy me a bus ticket and How was your trip? (about.js).
    Above the panel and drawer, under the location gate and the stop alarm. */
-.about-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-.about-row .ghost { margin-top: 0; font-size: 15px; padding: 0 12px; }
-.ticket-btn { display: flex; align-items: center; justify-content: center; gap: 8px;
-  background: var(--amber-soft); color: var(--amber); }
+.ticket-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  margin-top: 8px; background: var(--amber-soft); color: var(--amber); }
 .ticket-btn:hover { background: rgba(245, 182, 66, .2); color: #ffc65a; }
 .ticket-btn svg, .ticket__icon { width: 20px; height: 20px; flex: 0 0 20px; }
 
@@ -1186,3 +1185,51 @@ html, body {
   .ticket__amts { grid-template-columns: repeat(2, 1fr); }
   .ticket__qr { width: 112px; height: 112px; flex-basis: 112px; }
 }
+
+/* About Vazhi: the last thing in the panel, a quiet row with a chevron */
+.about-btn {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  margin-top: 16px; padding: 14px 44px 14px 16px; border: 1px solid var(--line); border-radius: 14px;
+  background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.about-btn::after { content: ""; position: absolute; right: 18px; top: 50%; width: 9px; height: 9px;
+  margin-top: -5px; border-right: 2px solid var(--ink-faint); border-top: 2px solid var(--ink-faint);
+  transform: rotate(45deg); }
+.about-btn:hover { background: var(--panel-2); }
+.about-btn:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.about-btn__t { font-size: 16px; font-weight: 600; line-height: 22px; }
+.about-btn__s { font-size: 14px; line-height: 20px; color: var(--ink-faint); }
+
+/* the bus-ticket window */
+.ticket__title { display: flex; align-items: center; gap: 10px; color: var(--amber); }
+.ticket__title .ticket__icon { width: 24px; height: 24px; flex-basis: 24px; }
+#ticket .about__story { margin-bottom: 20px; }
+.ticket__paybtn {
+  display: flex; align-items: center; justify-content: center; width: 100%; min-height: 54px; margin-top: 16px;
+  border: 0; border-radius: 14px; cursor: pointer; background: var(--amber); color: var(--amber-ink);
+  font: inherit; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;
+  box-shadow: 0 8px 24px rgba(245, 182, 66, .25);
+}
+.ticket__paybtn:hover { background: #ffc65a; }
+.ticket__paybtn:disabled { opacity: .5; cursor: default; box-shadow: none; }
+.ticket__paybtn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.ticket__pay:empty { display: none; }
+
+/* how was your trip? */
+.rate__stars { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+.rate__star {
+  width: 56px; height: 56px; padding: 8px; border: 0; border-radius: 14px; cursor: pointer;
+  background: transparent; color: #3d4a5c; transition: transform .12s, color .12s;
+}
+.rate__star svg { width: 100%; height: 100%; fill: currentColor; }
+.rate__star:hover { transform: scale(1.08); color: #6b5a33; }
+.rate__star.is-on { color: var(--amber); }
+.rate__star:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.rate__word { margin: 4px 0 16px; text-align: center; font-size: 15px; font-weight: 600; color: var(--ink-dim); }
+.rate__form textarea { min-height: 72px; }
+.about__form[hidden] { display: none; }
+#rate-msg:empty { display: none; }
+#rate .about__title { margin-right: 56px; }
+.rate__ticket h3 { color: var(--amber); }
+.rate__ticket .ticket__paybtn { margin-top: 0; }
+@media (max-width: 420px) { .rate__star { width: 50px; height: 50px; } }

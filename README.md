@@ -237,6 +237,23 @@ back. The threshold is `CONFIRM` in `transitnav/stopnames.py`. Stored in
 `data/stops.db`, like bus times: never in git, no IP addresses, one vote per
 browser.
 
+### Messages, trip ratings and bus tickets
+
+*About Vazhi* (the last button in the panel) tells why Vazhi was made and has
+a box to message the maker. When a trip ends at the rider's stop, a pop-up asks
+for one to five stars (at most once a day; every time after a demo ride) and
+offers *Buy me a bus ticket*. Both are saved in `data/feedback.db` (never in
+git, 6 a visitor per hour).
+
+- **Read them on this PC:** the *Vazhi Messages* shortcut on the desktop
+  (`python tools/inbox.py --shortcut` makes it; `pythonw tools/inbox.py` opens it).
+- **On your phone and laptop, also from a cloud server:** create a bot with
+  @BotFather in Telegram, then run `python tools/telegram_setup.py`.
+- **Bus tickets (UPI):** put `VAZHI_UPI_ID=yourname@okaxis` and
+  `VAZHI_UPI_NAME=Your Name` (optionally `VAZHI_PAY_LINK=https://...` for card
+  payments) in `data/vazhi.env`. Until then the Pay button says payments are
+  not switched on.
+
 ## How it works
 
 | Stage | What happens |

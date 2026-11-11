@@ -252,7 +252,12 @@ var ALERTS = (function () {
     stopRinging();
     awake = true;
     el("alarm").hidden = true;
-    if (targets.length && fired[(targets.length - 1) + ":arrive"]) stop("You have arrived. Trip alerts are off.");
+    if (targets.length && fired[(targets.length - 1) + ":arrive"]) {
+      var demo = simulating, where = targets[targets.length - 1].name;
+      stop("You have arrived. Trip alerts are off.");
+      // The trip is over: about.js asks how it went (and offers a bus ticket).
+      document.dispatchEvent(new CustomEvent("vazhi:arrived", { detail: { demo: demo, stop: where } }));
+    }
   }
 
   /* ----------------------------------------------------- tracking */

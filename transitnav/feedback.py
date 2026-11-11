@@ -1,4 +1,5 @@
-"""Riders' messages to the maker ("Tell me what you think" in About).
+"""Riders' messages to the maker ("Tell me what you think" in About), and
+the stars they give a trip in the pop-up at the end of it.
 
 Every message is saved first, in data/feedback.db (riders' data: never in
 git, backed up nightly on the cloud server), then sent to the owner's
@@ -42,6 +43,9 @@ def _connect():
     db.execute("""CREATE TABLE IF NOT EXISTS feedback (
         id INTEGER PRIMARY KEY, text TEXT NOT NULL, contact TEXT NOT NULL,
         page TEXT NOT NULL, created REAL NOT NULL, sent INTEGER NOT NULL DEFAULT 0)""")
+    cols = {row[1] for row in db.execute("PRAGMA table_info(feedback)")}
+    if "rating" not in cols:                  # databases from before trip ratings
+        db.execute("ALTER TABLE feedback ADD COLUMN rating INTEGER")
     return db
 
 
@@ -58,7 +62,11 @@ def add(body: dict, client: str = "?") -> int:
         raise FeedbackError("Thanks - that's a lot of messages for now. "
                             "Please try again in an hour.") from None
     text = _clean(body.get("text"), MAX_TEXT + 1)
-    if len(text) < 3:
+    rating = body.get("rating")
+    if rating is not None:
+        if isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 5:
+            raise FeedbackError("Pick 1 to 5 stars.")
+    elif len(text) < 3:                       # a message needs words; stars alone are enough
         raise FeedbackError("Write a few words first.")
     if len(text) > MAX_TEXT:
         raise FeedbackError("Please keep it under %d letters." % MAX_TEXT)
@@ -67,8 +75,8 @@ def add(body: dict, client: str = "?") -> int:
     with _lock:
         db = _connect()
         try:
-            cur = db.execute("INSERT INTO feedback (text, contact, page, created) VALUES (?,?,?,?)",
-                             (text, contact, page, time.time()))
+            cur = db.execute("INSERT INTO feedback (text, contact, page, created, rating)"
+                             " VALUES (?,?,?,?,?)", (text, contact, page, time.time(), rating))
             db.commit()
             new_id = cur.lastrowid
         finally:
@@ -80,10 +88,16 @@ def add(body: dict, client: str = "?") -> int:
 
 
 def _message(row) -> str:
-    _id, text, contact, page, created = row
+    _id, text, contact, page, created, rating = row
     when = time.strftime("%d %b %Y, %I:%M %p", time.localtime(created))
+    where = (" - from " + page) if page else ""
+    if rating:
+        stars = "\u2605" * rating + "\u2606" * (5 - rating)
+        return ("Trip rated on Vazhi (#%d): %s %d/5%s%s\n%s%s"
+                % (_id, stars, rating, "\n\n" + text if text else "",
+                   "\n\n- " + contact if contact else "", when, where))
     return ("New message on Vazhi (#%d)\n\n%s\n\n- %s\n%s%s"
-            % (_id, text, contact or "no name given", when, (" - from " + page) if page else ""))
+            % (_id, text, contact or "no name given", when, where))
 
 
 def _telegram(token: str, chat: str, text: str) -> bool:
@@ -111,7 +125,7 @@ def send_waiting(limit: int = 20) -> int:
     try:
         db = _connect()
         try:
-            rows = db.execute("SELECT id, text, contact, page, created FROM feedback"
+            rows = db.execute("SELECT id, text, contact, page, created, rating FROM feedback"
                               " WHERE sent = 0 ORDER BY id LIMIT ?", (limit,)).fetchall()
             for row in rows:
                 if not _telegram(token, chat, _message(row)):

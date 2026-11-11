@@ -15,7 +15,7 @@
 <meta name="apple-mobile-web-app-title" content="Vazhi" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
 <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css" />
 <link rel="stylesheet" href="style.css" />
@@ -79,7 +79,7 @@
         <span class="point__dot point__dot--origin"></span>
         <div class="point__body">
           <span class="point__label">Start</span>
-          <input class="point__input" id="origin-input" type="search" autocomplete="off"
+          <input class="point__input" id="origin-input" type="search" autocomplete="off" spellcheck="false"
                  placeholder="Where from? Search a place" aria-label="Start"
                  aria-autocomplete="list" aria-controls="origin-suggest" />
         </div>
@@ -90,7 +90,7 @@
         <span class="point__dot point__dot--destination"></span>
         <div class="point__body">
           <span class="point__label">Destination</span>
-          <input class="point__input" id="dest-input" type="search" autocomplete="off"
+          <input class="point__input" id="dest-input" type="search" autocomplete="off" spellcheck="false"
                  placeholder="Where to? Search a place" aria-label="Destination"
                  aria-autocomplete="list" aria-controls="dest-suggest" />
         </div>
@@ -164,14 +164,16 @@
     <p class="offline" id="offline" hidden></p>
 
     <button type="button" class="ghost addstop-btn" id="add-stop">Add a missing bus stop</button>
-    <div class="about-row">
-      <button type="button" class="ghost about-btn" id="about-open">About &amp; feedback</button>
-      <button type="button" class="ghost ticket-btn" id="ticket-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4Z"/><path d="M14 6v2M14 11v2M14 16v2"/></svg>Buy me a bus ticket</button>
-    </div>
+    <button type="button" class="ghost ticket-btn" id="ticket-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4Z"/><path d="M14 6v2M14 11v2M14 16v2"/></svg>Buy me a bus ticket</button>
 
     <footer class="panel__foot">
       Times are estimates, not a timetable.
     </footer>
+
+    <button type="button" class="about-btn" id="about-open">
+      <span class="about-btn__t">About Vazhi</span>
+      <span class="about-btn__s">Why I made it &middot; send me a message</span>
+    </button>
   </aside>
 
   <main class="map-wrap">
