@@ -14,3 +14,6 @@ __pycache__/
 # Paid IRCTC "Trains at a Glance" e-book: personal use only, never commit it
 TAG-*.pdf
 *.TAG.pdf
+
+# Copyright filing pack (personal; rebuilt from the code)
+copyright-filing/

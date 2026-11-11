@@ -1,0 +1,20 @@
+Vazhi - journey planner for Kerala
+Copyright (c) 2026 Ashil J Thomas. All rights reserved.
+
+The source code, design, text and images of Vazhi in this repository are the
+work of Ashil J Thomas. No part of them may be copied, changed, published or
+used to build another product without written permission from the author.
+
+Parts that belong to others, and keep their own licences:
+
+- Map data: (c) OpenStreetMap contributors, under the Open Database Licence
+  (ODbL). https://www.openstreetmap.org/copyright
+- web/vendor/leaflet: Leaflet 1.9.4, BSD 2-Clause licence (see its LICENSE).
+- web/vendor/maplibre: MapLibre GL JS 4.7.1, BSD 3-Clause licence
+  (LICENSE.txt), and maplibre-gl-leaflet 0.0.22, ISC licence
+  (LICENSE-leaflet-plugin).
+- web/fonts: Noto Sans glyphs, SIL Open Font Licence 1.1.
+- Route service: Valhalla (MIT licence), run unchanged in Docker; not part of
+  this repository.
+
+For permission, contact the author through the project's page.
