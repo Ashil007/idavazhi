@@ -334,6 +334,10 @@ var ALERTS = (function () {
 
   function onFix(lat, lon, accuracy, when) {
     var here = [lat, lon];
+    // For "Share where this train is" (livetrain.js), which decides itself
+    // whether to send anything.
+    document.dispatchEvent(new CustomEvent("vazhi:fix", {
+      detail: { lat: lat, lon: lon, accuracy: accuracy, simulating: simulating } }));
     if (last) {
       var dt = (when - last.t) / 1000;
       if (dt > 0.5) {
@@ -497,6 +501,7 @@ var ALERTS = (function () {
 
   function stop(message) {
     running = false;
+    document.dispatchEvent(new CustomEvent("vazhi:tripend"));
     simulating = false;
     if (watchId != null) navigator.geolocation.clearWatch(watchId);
     watchId = null;

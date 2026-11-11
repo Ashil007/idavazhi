@@ -149,6 +149,12 @@
           <input type="checkbox" id="trip-silent" role="switch" />
           <span class="switch__track" aria-hidden="true"></span>
         </label>
+        <label class="switch trip__share" id="trip-share" hidden>
+          <span class="switch__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M9 20l-2 2M15 20l2 2"/></svg></span>
+          <span class="switch__text"><b>Share where this train is</b><span>Anonymous. Helps riders waiting for it</span></span>
+          <input type="checkbox" id="trip-share-on" role="switch" />
+          <span class="switch__track" aria-hidden="true"></span>
+        </label>
         <button type="button" class="trip__start" id="trip-start">Wake me before my stop</button>
         <button type="button" class="ghost trip__sim" id="trip-sim">See how the alarm works (demo)</button>
         <button type="button" class="ghost" id="trip-stop" hidden>Stop trip alerts</button>
@@ -211,6 +217,7 @@
 <script src="outbox.js"></script>
 <script src="times.js"></script>
 <script src="stops.js"></script>
+<script src="livetrain.js"></script>
 <script src="install.js"></script>
 <script src="permit.js"></script>
 <script src="notice.js"></script>

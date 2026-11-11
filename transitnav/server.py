@@ -21,7 +21,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import (basemap, feedback, limits, locate, overpass, places, preload, router,
-               settings, contact, stopnames, tickets, timings, userplaces)
+               settings, contact, livetrains, stopnames, tickets, timings, userplaces)
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -480,6 +480,13 @@ class Handler(BaseHTTPRequestHandler):
                 if limits.prefetch_slots.acquire(blocking=False):
                     threading.Thread(target=_prefetch, args=(point, mode), daemon=True).start()
                 self._json(202, {"ok": True})
+            elif route == "/api/trains/live":
+                if not self._limit("trainlive"):
+                    return
+                try:
+                    self._json(200, livetrains.live((params.get("number") or [""])[0]))
+                except livetrains.LiveError as exc:
+                    self._json(400, {"error": str(exc)})
             elif route == "/api/inbox":
                 self._inbox()
             elif route == "/" and ("from" in params or "to" in params):
@@ -661,6 +668,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/feedback":
             self._feedback_post()
+            return
+        if parsed.path == "/api/trains/report":
+            try:
+                self._json(200, {"ok": True, "kept": livetrains.report(self._body(), self._client())})
+            except livetrains.LiveError as exc:
+                self._json(400, {"error": str(exc)})
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+                self._json(500, {"error": OOPS})
             return
         if parsed.path != "/api/plan":
             self._send(404, b"Not found", "text/plain; charset=utf-8")

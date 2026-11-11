@@ -34,7 +34,7 @@
       <ul>
         <li>You don't sign up. Vazhi doesn't know your name unless you type it into a message.</li>
         <li>Your saved places, recent trips and settings stay on your phone.</li>
-        <li>During a trip, your live position is used on your phone for the alarm. It is not sent anywhere.</li>
+        <li>During a trip, your live position is used on your phone for the alarm. It is not sent anywhere, unless you turn on &ldquo;Share where this train is&rdquo;.</li>
         <li>No analytics, no advertising, no cookies from Vazhi, and nothing is sold.</li>
         <li>Payments go through Razorpay. Vazhi never sees your card, UPI or bank details.</li>
       </ul>
@@ -62,6 +62,8 @@
       <p>To find a route, your phone sends the start and end points, any stops on the way and the way of travel (bus, train, metro, walking, two-wheeler). Place names you type are sent to find matching places. These are used to answer you and are not stored. The server log records only that a plan was made, with the time and whether it worked: no places, coordinates or addresses.</p>
       <h3>Your location</h3>
       <p>If you allow it, your phone's location is used as the start of a trip. It is sent only as part of that trip request. While a trip alarm is running, your position is checked on your phone and never leaves it.</p>
+      <h3>&ldquo;Share where this train is&rdquo; (off unless you turn it on)</h3>
+      <p>On a train trip you can choose to help riders waiting for your train. Then, while the alarm runs and your phone is on that train's track, its position is sent about every 45 seconds with the train number and a random code made for that one trip, so two phones aren't counted as one. Nothing else is sent: no name, no device id. Positions are held only in the server's memory for 20 minutes and never written to disk. Others see where the train was last seen and how many riders shared it, never who.</p>
       <h3>Bus times, stops and places you add</h3>
       <p>When you add a bus time, rename or add a stop, add a missing place, or answer a question about one, I keep what you added, when, and a scrambled (hashed) form of your phone's random code, so the same phone can't vote twice. What you add is shown to other riders.</p>
       <h3>Messages and trip ratings</h3>
@@ -87,6 +89,7 @@
       <h2>How long things are kept</h2>
       <ul>
         <li>Trip plans and searches: not kept.</li>
+        <li>Shared train positions: 20 minutes, in memory only.</li>
         <li>Messages and ratings: until I have dealt with them, or until you ask me to delete them.</li>
         <li>Bus times, stop names and added places: as long as they help riders.</li>
         <li>Payment records: as long as Indian tax and accounting law requires (up to 8 years).</li>

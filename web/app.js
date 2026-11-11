@@ -821,6 +821,7 @@ function renderPlan(plan, fit) {
   }
   renderOptions(plan);
   ALERTS.attach(plan);
+  LIVETRAIN.attach(plan);
 
   /* ---- the trip in one line (phones: above the time, with "Change") ---- */
   el("trip-head-from").textContent = el("origin-input").value || "Start";
@@ -871,6 +872,7 @@ function renderPlan(plan, fit) {
     }
     li.innerHTML = html;
     if (leg.access === "cab" || offersUber(plan, leg)) li.appendChild(uberButton(plan, leg));
+    if (leg.type === "transit" && leg.train) LIVETRAIN.legButton(li, leg);   // where is it now?
     // Bus rides: the times riders have added for this stop and direction.
     if (plan.mode === "bus" && leg.type === "transit" && leg.from && leg.to) {
       var times = document.createElement("div");
@@ -923,6 +925,7 @@ DRAWER.init();
 INSTALL.init();
 ALERTS.init();
 STOPS.init();
+LIVETRAIN.init();
 setActive("origin");
 // Location and alarms are required (permit.js); once both are allowed, find
 // the rider. A shared trip already says where from: don't locate then.

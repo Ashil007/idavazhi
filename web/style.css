@@ -418,6 +418,16 @@ html, body {
 .suggest .s-foot button, .suggest .s-foot a { font: inherit; font-size: 14px; font-weight: 600; color: var(--accent);
                    background: none; border: 0; padding: 4px 0; cursor: pointer; text-decoration: none; }
 .suggest .s-foot button:hover, .suggest .s-foot a:hover { text-decoration: underline; }
+/* Where is my train (livetrain.js) */
+.livetrain { margin-top: 10px; }
+.livetrain__btn { font: inherit; font-size: 14px; font-weight: 600; color: var(--train, #e8833a); background: rgba(232,131,58,.12);
+                  border: 1px solid rgba(232,131,58,.35); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+.livetrain__btn:hover { background: rgba(232,131,58,.2); }
+.livetrain__out { margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: var(--ink-dim); }
+.livetrain__out.is-seen b { color: var(--ink); }
+.live-train span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+                   background: #e8833a; color: #1b1405; border: 3px solid #fff; box-shadow: 0 2px 10px rgba(0,0,0,.45); }
+.live-train svg { width: 18px; height: 18px; }
 .addstop select { font: inherit; font-size: 15px; padding: 8px; border-radius: 8px; border: 1px solid #c9d1dc; background: #fff; color: #111; }
 .trip__sim { font-size: 16px; }
 .trip__status {
@@ -892,6 +902,7 @@ html, body {
   #trip-status { order: 2; }
   .trip__when { order: 3; }
   .trip__silent { order: 4; }
+  .trip__share { order: 4; }
   #trip-sim { order: 5; }
   .trip__note { order: 6; }
 }
