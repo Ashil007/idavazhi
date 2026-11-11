@@ -1293,3 +1293,52 @@ html, body {
 .ticket__thanks { padding: 14px 16px; border-radius: 14px; background: rgba(34,160,107,.14); border: 1px solid rgba(34,160,107,.4); }
 .ticket__thanks b { display: block; font-size: 18px; color: #7fd3a8; }
 .ticket__thanks p { margin: 4px 0 0; font-size: 14px; line-height: 22px; color: var(--ink-dim); }
+
+/* ------------------------------------------------------------------
+   Fewer boxes (Nov 2026). One surface per idea, rows with hairlines
+   inside it, and quiet text actions instead of a stack of grey slabs. */
+
+/* A switch that is not for this trip (train sharing on a bus trip). */
+.switch[hidden], .ghost.ghost[hidden] { display: none; }
+
+/* Start and destination: one card with two rows, joined by the route line. */
+#points-block .block__title { display: none; }
+#points-block .point { position: relative; margin-bottom: 0; border-radius: 0; }
+#point-origin { border-radius: 16px 16px 0 0; }
+#point-destination { border-radius: 0 0 16px 16px; border-top: 1px solid var(--line); }
+#point-destination .point__dot { position: relative; }
+#point-destination .point__dot::before {
+  content: ""; position: absolute; left: 4px; bottom: calc(100% + 5px); width: 2px; height: 40px;
+  background: repeating-linear-gradient(to bottom, var(--ink-faint) 0 3px, transparent 3px 7px);
+}
+#origin-suggest:not([hidden]) + #point-destination .point__dot::before { display: none; }
+.point.is-active { box-shadow: inset 3px 0 0 var(--accent); background: var(--panel-3); }
+
+/* Secondary actions read as links, so "Plan journey" leads on its own. */
+.ghost:not(.ticket-btn) {
+  display: block; width: auto; min-height: 44px; margin: 4px auto 0; padding: 0 8px; align-self: center;
+  background: none; color: var(--ink-dim); font-size: 15px; font-weight: 500;
+  text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 5px;
+}
+.ghost:not(.ticket-btn):hover { background: none; color: var(--ink); text-decoration-color: currentColor; }
+#trip-stop { width: 100%; border: 2px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+
+/* The alarm's settings: one list with hairlines, not three boxes. */
+.trip { gap: 0; }
+.trip > .ring, .trip > .switch { background: none; border-radius: 0; padding: 16px 2px; border-top: 1px solid var(--line); }
+.trip__start { margin: 8px 0; }
+.ring__value b { font-size: 34px; }
+.ring__sub { margin: 6px 0 12px; font-size: 15px; line-height: 22px; }
+.ring__chips { display: flex; gap: 0; padding: 3px; border-radius: 12px; background: var(--panel-2); overflow-x: auto; }
+.ring__chip { flex: 1 0 auto; min-height: 40px; padding: 0 10px; border-radius: 9px; background: none;
+              font-size: 14px; color: var(--ink-dim); }
+.ring__chip:hover { background: var(--panel-3); color: var(--ink); }
+.ring__chip[aria-checked="true"] { background: var(--amber); color: var(--amber-ink); }
+.switch { min-height: 56px; }
+
+/* Route choices: one list, the chosen one marked by a bar, not a ring. */
+.options { gap: 0; border-radius: 14px; overflow: hidden; background: var(--panel-2); }
+.option { border-radius: 0; background: none; padding: 12px 16px 12px 18px; }
+.option + .option { border-top: 1px solid var(--line); }
+.option:hover { background: var(--panel-3); }
+.option.is-selected { box-shadow: inset 3px 0 0 var(--accent); background: var(--accent-soft); }
