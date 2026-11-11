@@ -52,6 +52,7 @@ class ServerTest(unittest.TestCase):
         for path in ("/", "/app", "/api/modes", "/no-such-file"):
             _, h, _ = self.get(path)
             self.assertIn("frame-ancestors 'none'", h["Content-Security-Policy"], path)
+            self.assertIn("media-src 'self' blob:", h["Content-Security-Policy"], path)  # the alarm siren
             self.assertIn("script-src 'self'", h["Content-Security-Policy"], path)
             self.assertEqual(h["X-Content-Type-Options"], "nosniff", path)
             self.assertEqual(h["X-Frame-Options"], "DENY", path)
@@ -137,6 +138,16 @@ class ServerTest(unittest.TestCase):
                                       {"X-Forwarded-For": "198.51.100.8"})[0], 200)
         finally:
             limits.LIMITS["search"] = saved
+
+    def test_video_ranges(self):
+        from transitnav.server import _byte_range
+        self.assertEqual(_byte_range("bytes=0-1", 10), (0, 1))
+        self.assertEqual(_byte_range("bytes=4-", 10), (4, 9))
+        self.assertEqual(_byte_range("bytes=-3", 10), (7, 9))
+        self.assertEqual(_byte_range("bytes=5-99", 10), (5, 9))
+        self.assertEqual(_byte_range("bytes=10-", 10), "bad")
+        self.assertIsNone(_byte_range(None, 10))
+        self.assertIsNone(_byte_range("bytes=0-1,4-5", 10))
 
     def test_health(self):
         code, _, body = self.get("/api/health")

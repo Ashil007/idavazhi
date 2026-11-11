@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
 <link rel="stylesheet" href="home.css" />
 </head>
 <body>
@@ -28,6 +28,7 @@
       <span class="ml" lang="ml">വഴി</span>
     </a>
     <nav class="nav__links" aria-label="Sections">
+      <a href="#demo">Demo</a>
       <a href="#why">Why Vazhi</a>
       <a href="#features">Features</a>
       <a href="#how">How it works</a>
@@ -43,6 +44,7 @@
   <!-- Phones and tablets: the sections behind the three-bar button. -->
   <nav class="nav__drop" id="nav-drop" aria-label="Sections" hidden>
     <div class="wrap">
+      <a href="#demo">Demo</a>
       <a href="#why">Why Vazhi</a>
       <a href="#features">Features</a>
       <a href="#how">How it works</a>
@@ -92,6 +94,37 @@
     <div><b>3</b><span>ways to travel: bus, train and metro</span></div>
     <div><b>500 m – 10 km</b><span>you choose when the alarm rings</span></div>
     <div><b>₹0</b><span>no fees, no account, no ads</span></div>
+  </div>
+</section>
+
+<!-- ============================================================ demo -->
+<section class="section demo" id="demo" aria-labelledby="demo-h">
+  <div class="wrap demo__in">
+    <div class="demo__text">
+      <p class="eyebrow">Watch the demo</p>
+      <h2 id="demo-h">From &ldquo;where to?&rdquo; to &ldquo;wake up&rdquo; in 30 seconds</h2>
+      <ol class="demo__steps">
+        <li><b>Type where you&rsquo;re going.</b> Vazhi searches 3,76,712 places in Kerala.</li>
+        <li><b>Plan the trip.</b> It finds your bus and marks every stop on the map.</li>
+        <li><b>Ride.</b> Vazhi follows the bus and counts down the distance to your stop.</li>
+        <li><b>Wake up.</b> The alarm rings 2&nbsp;km before your stop, and again when you are there.</li>
+      </ol>
+      <p class="demo__note">A real recording of Vazhi&rsquo;s demo ride. The 32-minute trip is sped up to 10 seconds.</p>
+    </div>
+    <div class="demo__shot">
+      <div class="phone phone--flat demo__phone">
+        <video class="demo__video" id="demo-video" muted loop playsinline preload="metadata"
+               poster="site/demo-poster.webp" width="600" height="1298"
+               aria-label="Vazhi demo: typing Vyttila, planning a bus trip from Edappally, the bus moving along the map, then the alarm: This is your stop">
+          <source src="site/demo.mp4" type="video/mp4" />
+        </video>
+      </div>
+      <button type="button" class="demo__toggle" id="demo-toggle" aria-controls="demo-video">
+        <svg class="demo__ico demo__ico--pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg>
+        <svg class="demo__ico demo__ico--play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <span id="demo-toggle-label">Pause</span>
+      </button>
+    </div>
   </div>
 </section>
 

@@ -130,6 +130,36 @@
     items.forEach(function (el) { el.classList.add("reveal"); io.observe(el); });
   }
 
+  // The demo video: plays (muted, looping) while it is on screen, unless the
+  // visitor asked their device for less motion; the button pauses and plays.
+  var video = $("demo-video"), toggle = $("demo-toggle");
+  if (video && toggle) {
+    var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var wanted = !still;                       // what the visitor wants, apart from scrolling
+    var showState = function () {
+      var playing = !video.paused;
+      toggle.classList.toggle("is-paused", !playing);
+      $("demo-toggle-label").textContent = playing ? "Pause" : "Play";
+      toggle.setAttribute("aria-label", playing ? "Pause the demo video" : "Play the demo video");
+    };
+    video.addEventListener("play", showState);
+    video.addEventListener("pause", showState);
+    toggle.addEventListener("click", function () {
+      wanted = video.paused;
+      if (wanted) video.play().catch(function () {}); else video.pause();
+    });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) {
+        var seen = entries[entries.length - 1].isIntersecting;   // the newest, if several came at once
+        if (seen && wanted) video.play().catch(function () {});
+        if (!seen && !video.paused) video.pause();
+      }, { threshold: 0.35 }).observe(video);
+    } else if (wanted) {
+      video.play().catch(function () {});
+    }
+    showState();
+  }
+
   // The full guide: light up the topic being read in the topic list.
   var toc = document.querySelectorAll(".guide__toc a");
   if (toc.length && "IntersectionObserver" in window) {

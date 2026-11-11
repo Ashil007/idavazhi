@@ -30,8 +30,9 @@ MAX_BODY = 4096
 MAX_QUERY = 120          # characters in a place search
 
 # Sent with every response. The policy allows only Vazhi's own scripts (the
-# map libraries are in web/vendor), Google's web fonts, and the blob: worker
-# the map draws with; nothing may frame the app (clickjacking).
+# map libraries are in web/vendor), Google's web fonts, the blob: worker the
+# map draws with and the blob: alarm siren (alerts.js builds the sound in the
+# page); nothing may frame the app (clickjacking).
 CSP = "; ".join([
     "default-src 'self'",
     "script-src 'self'",
@@ -39,6 +40,7 @@ CSP = "; ".join([
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
     "connect-src 'self'",
+    "media-src 'self' blob:",
     "worker-src 'self' blob:",
     "child-src blob:",
     "manifest-src 'self'",
@@ -81,6 +83,27 @@ NL = chr(10)
 # Not in every system's MIME table; browsers want this type for the app manifest.
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
+
+
+def _byte_range(header, size):
+    """(start, end) for a single "bytes=a-b" range, None for no range (send
+    it all), "bad" for a range outside the file."""
+    if not header or not header.startswith("bytes=") or "," in header:
+        return None
+    first, _, last = header[6:].strip().partition("-")
+    try:
+        if first == "":                       # "bytes=-500": the last 500 bytes
+            n = int(last)
+            if n <= 0:
+                return "bad"
+            return max(0, size - n), size - 1
+        start = int(first)
+        end = int(last) if last else size - 1
+    except ValueError:
+        return None
+    if start >= size or end < start:
+        return "bad"
+    return start, min(end, size - 1)
 
 class ClientGone(Exception):
     """The browser closed the stream before the plan finished."""
@@ -261,6 +284,18 @@ class Handler(BaseHTTPRequestHandler):
         with open(full, "rb") as fh:
             body = fh.read()
         extra = {"Last-Modified": formatdate(mtime, usegmt=True)}
+        if ctype.startswith(("video/", "audio/")):
+            # Video players (Safari above all) ask for pieces: "Range: bytes=0-1".
+            extra["Accept-Ranges"] = "bytes"
+            part = _byte_range(self.headers.get("Range"), len(body))
+            if part == "bad":
+                self._send(416, b"", ctype, {"Content-Range": "bytes */%d" % len(body)})
+                return
+            if part:
+                start, end = part
+                extra["Content-Range"] = "bytes %d-%d/%d" % (start, end, len(body))
+                self._send(206, body[start:end + 1], ctype, extra, cache="no-cache")
+                return
         # Big map data (the 1.8 MB stop list) goes over the phone's data
         # connection gzipped: about an eighth of the size.
         if len(body) > GZIP_MIN and "gzip" in (self.headers.get("Accept-Encoding") or "")                 and (ctype.startswith("text/") or "json" in ctype or rel.endswith(".geojson")):
