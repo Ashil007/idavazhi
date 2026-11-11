@@ -122,10 +122,11 @@ p { margin: 0; }
 .hero h1 { font-size: clamp(38px, 9vw, 68px); font-weight: 800; letter-spacing: -.035em; }
 .hero h1 em { font-style: normal; color: var(--alarm); }
 .lead { margin-top: 20px; font-size: clamp(19px, 2.4vw, 22px); line-height: 1.55; color: var(--ink-dim); max-width: 600px; }
-/* a highlighter-pen stroke under the words that matter */
-.hl { color: var(--alarm); font-weight: 700; padding: 0 2px; border-radius: 2px;
-  background: linear-gradient(transparent 58%, rgb(245 182 66 / .22) 58%);
-  -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+/* the words that matter: alarm yellow with a thin underline that follows the
+   letters exactly, and the phrase kept on one line so it never splits */
+.hl { background: none; color: var(--alarm); font-weight: 700; white-space: nowrap;
+  text-decoration: underline; text-decoration-color: rgb(245 182 66 / .45);
+  text-decoration-thickness: .09em; text-underline-offset: .22em; text-decoration-skip-ink: auto; }
 .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
 .cta .btn { flex: 1 1 220px; }
 .cta--center { justify-content: center; }
