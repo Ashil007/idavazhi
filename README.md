@@ -255,6 +255,11 @@ git, 6 a visitor per hour).
   `rzp_live_` keys after Razorpay approves the account). *Pay* then opens
   Razorpay's window (UPI apps, card, net banking); the server makes the order
   and checks Razorpay's signature before a ticket counts (`transitnav/tickets.py`).
+  To try it with test keys: mobile `9000090000` (Razorpay refuses made-up
+  ones like 9999999999), *Cards*, Razorpay's test card `5267 3181 8797 5449`,
+  any future date, any CVV, skip saving the card, any OTP. In test mode UPI
+  shows only a QR code. The logo shows in Razorpay's window only on the
+  public link: Chrome stops outside sites loading anything from 127.0.0.1.
   Paid tickets show in *Vazhi Messages* and on Telegram.
 - **Without Razorpay (fallback):** `VAZHI_UPI_ID=yourname@okaxis` and
   `VAZHI_UPI_NAME=Your Name` give UPI app buttons on phones and a QR code on

@@ -36,7 +36,7 @@ MAX_QUERY = 120          # characters in a place search
 # window); nothing may frame the app (clickjacking).
 CSP = "; ".join([
     "default-src 'self'",
-    "script-src 'self' https://checkout.razorpay.com",
+    "script-src 'self' https://checkout.razorpay.com https://cdn.razorpay.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://cdn.razorpay.com",
@@ -57,7 +57,9 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "geolocation=(self), camera=(), microphone=(), payment=()",
-    "Cross-Origin-Opener-Policy": "same-origin",
+    # allow-popups: card payments may open the bank's page in a popup
+    # that Razorpay's window must keep talking to.
+    "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
 }
 OOPS = "Something went wrong on our side. Please try again."
 mimetypes.add_type("application/geo+json", ".geojson")
@@ -286,6 +288,9 @@ class Handler(BaseHTTPRequestHandler):
         with open(full, "rb") as fh:
             body = fh.read()
         extra = {"Last-Modified": formatdate(mtime, usegmt=True)}
+        if rel.startswith("icons/"):
+            # Razorpay's payment window loads the Vazhi logo from its own site.
+            extra["Access-Control-Allow-Origin"] = "*"
         if ctype.startswith(("video/", "audio/")):
             # Video players (Safari above all) ask for pieces: "Range: bytes=0-1".
             extra["Accept-Ranges"] = "bytes"

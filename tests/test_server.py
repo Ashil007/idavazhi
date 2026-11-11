@@ -149,6 +149,16 @@ class ServerTest(unittest.TestCase):
         self.assertIsNone(_byte_range(None, 10))
         self.assertIsNone(_byte_range("bytes=0-1,4-5", 10))
 
+    def test_payment_window_headers(self):
+        # Razorpay's window shows the logo from its own site, and card
+        # payments may need a bank popup that keeps talking to it.
+        code, h, _ = self.get("/icons/icon-192.png")
+        self.assertEqual(code, 200)
+        self.assertEqual(h.get("Access-Control-Allow-Origin"), "*")
+        _, h, _ = self.get("/app")
+        self.assertEqual(h["Cross-Origin-Opener-Policy"], "same-origin-allow-popups")
+        self.assertNotIn("Access-Control-Allow-Origin", h)
+
     def test_health(self):
         code, _, body = self.get("/api/health")
         self.assertEqual(code, 200)
