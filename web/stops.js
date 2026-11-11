@@ -11,6 +11,7 @@ var STOPS = (function () {
   var NEEDED = 30;
   var askLayer = null, addLayer = null;
   var picking = false;
+  var placing = null;          // adding a missing place: { name, done }
   var queue = [], showing = null;
 
   function $(id) { return document.getElementById(id); }
@@ -98,8 +99,57 @@ var STOPS = (function () {
     $("ask").querySelector("[data-cancel]").addEventListener("click", function () { picking = false; hideCard(); });
   }
 
+  /* --------------------------------------------- add a missing place */
+
+  // A search found nothing (say "VPK Distributors"): the rider taps where it
+  // is and names it; then everyone's search finds it (userplaces.py).
+  var KINDS = [["shop", "Shop"], ["office", "Office"], ["food", "Restaurant or hotel"],
+               ["health", "Hospital or clinic"], ["school", "School or college"],
+               ["worship", "Place of worship"], ["home", "House"], ["other", "Something else"]];
+  function addPlace(name, done) {
+    picking = false;
+    placing = { name: name, done: done };
+    SHEET.set("peek");
+    card('<div class="ask__title">Add \u201c' + esc(name) + '\u201d</div>' +
+         '<p class="ask__text">Tap the map where it is. Zoom in close so it lands on the right building.</p>' +
+         '<div class="ask__btns"><button type="button" class="ask__skip" data-cancel>Cancel</button></div>');
+    $("ask").querySelector("[data-cancel]").addEventListener("click", function () { placing = null; hideCard(); });
+  }
+  function placeClick(latlng) {
+    var job = placing;
+    placing = null;
+    hideCard();
+    if (!addLayer) addLayer = L.layerGroup().addTo(map);
+    addLayer.clearLayers();
+    var mark = L.circleMarker(latlng, { radius: 9, color: "#fff", weight: 3, fillColor: "#f5b642",
+                                        fillOpacity: 1 }).addTo(addLayer);
+    var html = '<form class="addstop"><label>Name<input name="name" maxlength="80" required value="' +
+      esc(job.name) + '" /></label><label>What is it?<select name="kind">' +
+      KINDS.map(function (k) { return '<option value="' + k[0] + '">' + k[1] + "</option>"; }).join("") +
+      '</select></label><button type="submit">Add place</button>' +
+      '<p class="addstop__msg" role="status"></p></form>';
+    mark.bindPopup(html, { minWidth: 230, closeOnClick: false }).openPopup();
+    var f = mark.getPopup().getElement().querySelector("form");
+    f.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = f.querySelector(".addstop__msg"), name = f.elements.name.value.trim();
+      msg.textContent = "Adding\u2026";
+      post("/api/places/add", { lat: latlng.lat, lon: latlng.lng, name: name,
+                                kind: f.elements.kind.value, device: device() })
+        .then(function (j) {
+          mark.setPopupContent('<div class="addstop">' + (j.queued ? esc(SAVED)
+            : j.merged ? "A rider already added it here. Thanks for checking!"
+            : "Added. Anyone searching for \u201c" + esc(name) + "\u201d will find it now.") + "</div>");
+          if (job.done) job.done(latlng, name);
+        })
+        .catch(function (err) { msg.textContent = err.message; });
+    });
+    mark.on("popupclose", function () { setTimeout(function () { addLayer.clearLayers(); }, 0); });
+  }
+
   // Called by the map's click handler first; true when the click was ours.
   function onMapClick(latlng) {
+    if (placing) { placeClick(latlng); return true; }
     if (!picking) return false;
     picking = false;
     hideCard();
@@ -140,6 +190,7 @@ var STOPS = (function () {
     c.querySelector(".ask__close").addEventListener("click", function () {
       if (showing) skip(showing.key);
       picking = false;
+      placing = null;
       hideCard();
       next();
     });
@@ -282,5 +333,5 @@ var STOPS = (function () {
     if (b) b.addEventListener("click", startAdding);
   }
 
-  return { init: init, fixLinks: fixLinks, afterPlan: afterPlan, onMapClick: onMapClick };
+  return { init: init, fixLinks: fixLinks, afterPlan: afterPlan, onMapClick: onMapClick, addPlace: addPlace };
 })();

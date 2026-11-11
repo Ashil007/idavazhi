@@ -19,6 +19,7 @@ LIMITS = {
     "report": (20, 3600),     # riders' bus times (timings.py)
     "vote": (120, 3600),
     "stop": (30, 3600),       # stop names and new stops (stopnames.py)
+    "place": (10, 3600),      # places riders add (userplaces.py)
     "stopvote": (200, 3600),
     "feedback": (6, 3600),    # messages to the maker (feedback.py)
     "inbox": (300, 3600),     # the owner's Messages app, every 30 s, plus wrong passwords

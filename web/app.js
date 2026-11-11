@@ -246,7 +246,17 @@ function placeSearch(role, input, list) {
            '" data-star="' + i + '" aria-label="' + (star ? "Remove from saved" : "Save this place") +
            '">' + (star ? "\u2605" : "\u2606") + "</button></div></li>";
   }
-  function show(results, empty, heads) {
+  // Under every search: add the place if the map lacks it, or look it up.
+  // (Google's places are never copied into Vazhi - its terms forbid that -
+  // the link only opens Google Maps for the rider.)
+  function extras(q) {
+    return '<li class="s-foot"><span class="s-foot__q">Not listed?</span>' +
+      '<button type="button" data-act="add" title="Tap where it is on the map; then everyone can find it">' +
+      '+ Add it to Vazhi</button>' +
+      '<a data-act="look" href="https://www.google.com/maps/search/?api=1&amp;query=' +
+      encodeURIComponent(q + ", Kerala") + '" target="_blank" rel="noopener">Google Maps ↗</a></li>';
+  }
+  function show(results, empty, heads, q) {
     items = results;
     active = -1;
     var html = "";
@@ -254,8 +264,22 @@ function placeSearch(role, input, list) {
       if (heads && heads[i]) html += '<li class="s-head">' + escapeHtml(heads[i]) + "</li>";
       html += row(r, i);
     });
-    list.innerHTML = html || '<li class="s-empty">' + escapeHtml(empty) + "</li>";
+    if (!html) html = '<li class="s-empty">' + escapeHtml(empty) + "</li>";
+    list.innerHTML = html + (q ? extras(q) : "");
     list.hidden = false;
+    Array.prototype.forEach.call(list.querySelectorAll("[data-act]"), function (li) {
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault();                     // keep the box focused; the link's click still opens
+        e.stopPropagation();
+        if (li.getAttribute("data-act") !== "add") return;
+        close();
+        input.blur();
+        STOPS.addPlace(q, function (latlng, name) {
+          MYPLACES.used({ name: name, detail: "", lat: latlng.lat, lon: latlng.lng });
+          setPoint(role, latlng, name);
+        });
+      });
+    });
     Array.prototype.forEach.call(list.querySelectorAll("[data-i]"), function (li) {
       // mousedown, not click: it fires before the input loses focus.
       li.addEventListener("mousedown", function (e) {
@@ -284,7 +308,7 @@ function placeSearch(role, input, list) {
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (ticket !== asked) return;          // an older answer arriving late
-        show(d.results || [], "No place found - try another spelling, or tap the map.");
+        show(d.results || [], "No place found by that name. Try another spelling, or:", null, q);
       })
       .catch(function () {
         if (ticket !== asked) return;

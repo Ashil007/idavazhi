@@ -21,7 +21,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import (basemap, feedback, limits, locate, overpass, places, preload, router,
-               settings, contact, stopnames, tickets, timings)
+               settings, contact, stopnames, tickets, timings, userplaces)
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -176,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
     # Logs: one line per trip plan, contribution or failed request - not per
     # search keystroke, map tile or file, which under load cost more to print
     # than to answer. No addresses or coordinates are logged.
-    LOGGED = ("/api/plan", "/api/timings", "/api/stops/rename", "/api/stops/add",
+    LOGGED = ("/api/plan", "/api/timings", "/api/stops/rename", "/api/stops/add", "/api/places/add",
               "/api/stops/answer", "/api/feedback", "/api/ticket/order", "/api/ticket/paid")
 
     def log_request(self, code="-", size="-"):
@@ -362,6 +362,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, hit[1])
             return
         results = places.search(q, near=near, limit=8)
+        # Places riders added (userplaces.py): an exact start of the name first.
+        added = userplaces.search(q, near=near)
+        results = [r for r in added if r["name"].lower().startswith(q.lower())] + results +                   [r for r in added if not r["name"].lower().startswith(q.lower())]
         if len(results) < 3 or full:
             try:
                 online = overpass.geocode(places.clean_query(q)[0] or q, limit=6, near=near)
@@ -599,6 +602,9 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/api/stops/rename":
                 self._json(200, {"ok": True, "names": stopnames.rename(body, client),
                                  "needed": stopnames.CONFIRM})
+            elif route == "/api/places/add":
+                self._json(200, dict(userplaces.add(body, client), ok=True))
+                _search_cache.clear()          # found by the next search at once
             elif route == "/api/stops/add":
                 self._json(200, dict(stopnames.add(body, client), ok=True, needed=stopnames.CONFIRM))
             else:   # /api/stops/answer
@@ -647,7 +653,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(403, {"error": "Requests must be JSON from Vazhi's own pages."})
             return
         if parsed.path in ("/api/timings", "/api/timings/vote", "/api/stops/rename",
-                           "/api/stops/add", "/api/stops/answer"):
+                           "/api/stops/add", "/api/stops/answer", "/api/places/add"):
             self._timings_post(parsed.path)
             return
         if parsed.path in ("/api/ticket/order", "/api/ticket/paid"):
