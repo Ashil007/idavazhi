@@ -552,3 +552,13 @@ b, strong { font-weight: 500; }
 .contact__msg.is-bad { color: #ff8a80; }
 .contact__note { margin-top: 24px; }
 .nav--doc .btn { margin-left: auto !important; }
+
+/* ------------------------------------------------------------ calmer (Nov 2026)
+ * How it works reads left to right like the rest of the page: the number
+ * sits with its heading instead of a yellow badge stuck on the phone. */
+.step { text-align: left; }
+.step .phone { margin: 0 0 28px; }
+.step__n { display: inline; width: auto; height: auto; margin: 0 12px 0 0; position: static;
+           border-radius: 0; background: none; box-shadow: none; color: var(--alarm);
+           font-size: inherit; font-variant-numeric: tabular-nums; }
+.step p { margin: 0; }
