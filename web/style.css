@@ -1233,3 +1233,31 @@ html, body {
 .rate__ticket h3 { color: var(--amber); }
 .rate__ticket .ticket__paybtn { margin-top: 0; }
 @media (max-width: 420px) { .rate__star { width: 50px; height: 50px; } }
+
+/* Other routes on the map: a time label on each (app.js) */
+.alt-label { background: none; border: 0; }
+.alt-label span {
+  display: inline-block; transform: translate(-50%, -50%); padding: 2px 8px; border-radius: 999px;
+  background: rgba(13,17,23,.88); border: 1px dashed rgba(238,242,247,.35); color: var(--ink-dim);
+  font: 600 12px/18px var(--font); white-space: nowrap; cursor: pointer;
+}
+.legend i.legend__alt { height: 0; border-top: 3px dashed currentColor; background: none; opacity: .7; }
+
+/* Phones: one button per UPI app */
+.ticket__with { margin: 8px 0 -4px; font-size: 15px; color: var(--ink-dim); }
+.ticket__with b { color: var(--amber); }
+.ticket__apps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ticket__app {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 14px; border-radius: 14px;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); text-decoration: none;
+  font-size: 16px; font-weight: 600;
+}
+.ticket__app:first-child { grid-column: 1 / -1; justify-content: center; background: var(--amber);
+  border-color: var(--amber); color: var(--amber-ink); font-size: 17px; }
+.ticket__app i { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.ticket__app:first-child i { box-shadow: 0 0 0 2px #fff; }
+.ticket__app i.is-any { background: none; border: 2px solid var(--ink-faint); }
+.ticket__app:focus-visible, .ticket__more:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.ticket__more { align-self: flex-start; padding: 6px 0; border: 0; background: none; color: var(--accent);
+  font: inherit; font-size: 14px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.ticket__paybtn[hidden] { display: none; }

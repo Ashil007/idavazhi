@@ -38,6 +38,16 @@ var ABOUT = (function () {
     return d.innerHTML;
   }
   function isPhone() { return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || ""); }
+  function isIOS() { return /iPhone|iPad|iPod/i.test(navigator.userAgent || ""); }
+
+  // UPI apps a phone can jump straight into, payment filled in. On Android an
+  // intent: link names the app (and goes to the Play Store if it is missing);
+  // on iPhone each app has its own link.
+  var APPS = [
+    { name: "Google Pay", dot: "#4285f4", android: "com.google.android.apps.nbu.paisa.user", ios: "gpay://upi/pay" },
+    { name: "PhonePe",    dot: "#5f259f", android: "com.phonepe.app",                      ios: "phonepe://pay" },
+    { name: "Paytm",      dot: "#00baf2", android: "net.one97.paytm",                      ios: "paytmmp://pay" }
+  ];
 
   var TICKET_ICON = '<svg class="ticket__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -193,9 +203,14 @@ var ABOUT = (function () {
     renderPay();
   }
 
-  function upiLink(amt) {
-    return "upi://pay?pa=" + support.upi + "&pn=" + encodeURIComponent(support.name) +
+  function upiQuery(amt) {
+    return "pa=" + support.upi + "&pn=" + encodeURIComponent(support.name) +
            "&am=" + amt.toFixed(2) + "&cu=INR&tn=" + encodeURIComponent("Vazhi bus ticket");
+  }
+  function upiLink(amt) { return "upi://pay?" + upiQuery(amt); }
+  function appLink(app, amt) {
+    if (isIOS()) return app.ios + "?" + upiQuery(amt);
+    return "intent://pay?" + upiQuery(amt) + "#Intent;scheme=upi;package=" + app.android + ";end";
   }
 
   // The QR code as an SVG: dark squares on white with a quiet margin, so any
@@ -223,13 +238,14 @@ var ABOUT = (function () {
     if (!amount) { el("ticket-other-amt").focus(); return; }
     showScan = true;
     renderPay();
-    if (support && support.upi && isPhone()) window.location.href = upiLink(amount);
   }
 
   function renderPay() {
     var btn = el("ticket-paybtn"), pay_ = el("ticket-pay");
     btn.textContent = amount ? "Pay ₹" + amount : "Pay";
     btn.disabled = !amount;
+    // On a phone the app buttons are the Pay button: one tap opens the app.
+    btn.hidden = !!(support && support.upi && isPhone());
     if (!support) { pay_.innerHTML = showScan ? '<p class="ticket__note">Loading...</p>' : ""; return; }
     if (support.offline) {
       pay_.innerHTML = '<p class="ticket__note">Connect to the internet to buy a ticket.</p>';
@@ -238,11 +254,31 @@ var ABOUT = (function () {
     var html = "";
     if (!support.upi && !support.link) {
       if (showScan) html = '<p class="ticket__note">Payments are not switched on yet. Thank you for wanting to help!</p>';
+    } else if (support.upi && isPhone()) {
+      if (!amount) {
+        html += '<p class="ticket__note">Type an amount in rupees.</p>';
+      } else {
+        html += '<p class="ticket__with">Pay <b>&#8377;' + amount + '</b> with</p><div class="ticket__apps">' +
+          APPS.map(function (a) {
+            return '<a class="ticket__app" href="' + esc(appLink(a, amount)) + '">' +
+                   '<i style="background:' + a.dot + '"></i>' + esc(a.name) + '</a>';
+          }).join("") +
+          '<a class="ticket__app" href="' + esc(upiLink(amount)) + '"><i class="is-any"></i>Other UPI app</a></div>' +
+          '<p class="ticket__note">Opens the app with the ticket filled in &mdash; just confirm with your UPI PIN.</p>';
+        if (showScan) {
+          html += '<div class="ticket__scan">' + qrSvg(upiLink(amount)) +
+                  '<p>Scan this from another phone to pay <b>&#8377;' + amount + '</b>.</p></div>' +
+                  '<p class="ticket__id">UPI ID: <b>' + esc(support.upi) + '</b>' +
+                  '<button type="button" class="ticket__copy" id="ticket-copy">Copy</button></p>';
+        } else {
+          html += '<button type="button" class="ticket__more" id="ticket-showqr">Paying from another phone? Show the QR code</button>';
+        }
+      }
     } else if (support.upi && showScan && amount) {
       var link = upiLink(amount);
       html += '<div class="ticket__scan">' + qrSvg(link) +
-              '<p>' + (isPhone() ? "No UPI app opened? Scan" : "Scan") +
-              ' this with GPay, PhonePe, Paytm or any UPI app to pay <b>&#8377;' + amount + '</b>.</p></div>' +
+              '<p>Scan this with your phone &mdash; GPay, PhonePe, Paytm or any UPI app &mdash; to pay <b>&#8377;' +
+              amount + '</b>.</p></div>' +
               '<p class="ticket__id">UPI ID: <b>' + esc(support.upi) + '</b>' +
               '<button type="button" class="ticket__copy" id="ticket-copy">Copy</button></p>' +
               '<p class="ticket__note">Paid? Thank you! Every ticket keeps Vazhi running.</p>';
@@ -252,6 +288,8 @@ var ABOUT = (function () {
               'Pay by card or other ways</a>';
     }
     pay_.innerHTML = html;
+    var more = el("ticket-showqr");
+    if (more) more.addEventListener("click", function () { showScan = true; renderPay(); });
     var copy = el("ticket-copy");
     if (copy) copy.addEventListener("click", function () {
       var done = function () { copy.textContent = "Copied"; setTimeout(function () { copy.textContent = "Copy"; }, 1800); };

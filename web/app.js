@@ -717,18 +717,36 @@ function renderPlan(plan, fit) {
 
   /* ---- map ---- */
   routeLayer.clearLayers();
-  // The other options first, in grey underneath: click one to switch to it.
+  // The other options first, underneath: faded dashes in the trip's colour
+  // on a dark edge, so they read as "another way" and not as a road, with
+  // their time on a label. Click one to switch to it.
   (state.options || []).forEach(function (opt, j) {
     if (opt === plan) return;
+    var tip = escapeHtml(opt.option_label || "Another route") + " &middot; " +
+              escapeHtml(opt.summary.duration_text);
+    var longest = null;
     opt.legs.forEach(function (leg) {
       if (!leg.geometry || leg.geometry.length < 2) return;
-      L.polyline(leg.geometry, { color: "#8d97a8", weight: leg.type === "transit" ? 6 : 4,
-                                 opacity: 0.6, lineCap: "round", lineJoin: "round" })
-        .addTo(routeLayer)
-        .bindTooltip(escapeHtml(opt.option_label || "Another route") + " &middot; " +
-                     escapeHtml(opt.summary.duration_text), { sticky: true })
-        .on("click", function () { selectOption(j, false); });
+      if (!longest || leg.geometry.length > longest.length) longest = leg.geometry;
+      var edge = L.polyline(leg.geometry, { color: "#0d1117", weight: 9, opacity: 0.55,
+                                            lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+      var dash = L.polyline(leg.geometry, { color: opt.color || color, weight: 4, opacity: 0.6,
+                                            dashArray: "10 10", lineCap: "round", lineJoin: "round",
+                                            className: "alt-route" }).addTo(routeLayer);
+      [edge, dash].forEach(function (line) {
+        line.bindTooltip(tip, { sticky: true })
+          .on("click", function () { selectOption(j, false); })
+          .on("mouseover", function () { dash.setStyle({ opacity: 0.95 }); })
+          .on("mouseout", function () { dash.setStyle({ opacity: 0.6 }); });
+      });
     });
+    if (longest) {
+      L.marker(longest[Math.floor(longest.length / 2)], {
+        icon: L.divIcon({ className: "alt-label", html: "<span>" + escapeHtml(opt.summary.duration_text) + "</span>",
+                          iconSize: null }),
+        keyboard: false, zIndexOffset: -100
+      }).addTo(routeLayer).bindTooltip(tip).on("click", function () { selectOption(j, false); });
+    }
   });
   plan.legs.forEach(function (leg) {
     if (!leg.geometry || leg.geometry.length < 2) return;
@@ -860,7 +878,9 @@ function renderPlan(plan, fit) {
     '<div><i style="background:' + access.color + '"></i> ' + access.noun + '</div>' +
     (plan.access !== "walk" && plan.legs.some(function (l) { return l.access === "walk"; })
       ? '<div><i style="background:' + ACCESS.walk.color + '"></i> ' + ACCESS.walk.noun + '</div>' : "") +
-    '<div><i style="background:' + color + '"></i> ' + escapeHtml(plan.mode_label) + " line</div>";
+    '<div><i style="background:' + color + '"></i> ' + escapeHtml(plan.mode_label) + " line</div>" +
+    ((state.options || []).length > 1
+      ? '<div><i class="legend__alt" style="color:' + color + '"></i> Other route</div>' : "");
   legend.hidden = false;
   STOPS.afterPlan(plan);   // riders renamed a stop on this trip? ask this rider
 }
