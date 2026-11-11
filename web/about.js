@@ -125,7 +125,13 @@ var ABOUT = (function () {
     '    <button type="submit" class="about__send">Send message</button>' +
     '    <p class="about__msg" id="about-msg" aria-live="polite"></p>' +
     '  </form>' +
-    '</section>',
+    '</section>' +
+    '<nav class="about__legal" aria-label="Policies">' +
+    '  <a href="/privacy" target="_blank" rel="noopener">Privacy</a>' +
+    '  <a href="/terms" target="_blank" rel="noopener">Terms</a>' +
+    '  <a href="/refunds" target="_blank" rel="noopener">Refunds</a>' +
+    '  <a href="/contact" target="_blank" rel="noopener">Contact</a>' +
+    '</nav>',
     function (box) {
       var text = el("about-text"), count = el("about-count");
       text.addEventListener("input", function () { count.textContent = text.value.length + " / " + MAX_TEXT; });
@@ -320,7 +326,8 @@ var ABOUT = (function () {
     if (support.razorpay) {
       // Razorpay's window offers UPI apps, cards and net banking itself.
       html = '<p class="ticket__note">Pay by UPI (Google Pay, PhonePe, Paytm...), card or net banking ' +
-             '&mdash; securely through Razorpay.</p>';
+             '&mdash; securely through Razorpay. A voluntary tip, not a travel ticket; ' +
+             '<a href="/refunds" target="_blank" rel="noopener">refund policy</a>.</p>';
     } else if (!support.upi && !support.link) {
       if (showScan) html = '<p class="ticket__note">Payments are not switched on yet. Thank you for wanting to help!</p>';
     } else if (support.upi && isPhone()) {

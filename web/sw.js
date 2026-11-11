@@ -10,7 +10,7 @@
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v38";
+var CACHE = "vazhi-shell-v39";
 var SHELL = [
   "/", "/app", "home.css", "home.js", "style.css", "manifest.webmanifest",
   "basemap.js", "sheet.js", "drawer.js", "alerts.js", "outbox.js", "times.js", "stops.js", "install.js", "permit.js", "notice.js", "about.js", "app.js",

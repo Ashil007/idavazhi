@@ -261,6 +261,15 @@ git, 6 a visitor per hour).
   shows only a QR code. The logo shows in Razorpay's window only on the
   public link: Chrome stops outside sites loading anything from 127.0.0.1.
   Paid tickets show in *Vazhi Messages* and on Telegram.
+- **Policy and contact pages:** `/privacy`, `/terms`, `/refunds` and `/contact`
+  (linked in the website footer, the About window and next to *Pay*). Razorpay
+  checks them before it switches on live payments, and wants an email and
+  phone on the contact page. Put them in `data/vazhi.env`, never in git:
+  `VAZHI_CONTACT_EMAIL=...`, `VAZHI_CONTACT_PHONE=+91 ...`,
+  `VAZHI_ADDRESS=Town, District, Kerala` (and `VAZHI_OWNER=` if the name
+  should differ). The server fills them in (`transitnav/contact.py`); without
+  them the pages point to the message form. The pages are plain-language
+  drafts: have them checked before a big launch.
 - **Without Razorpay (fallback):** `VAZHI_UPI_ID=yourname@okaxis` and
   `VAZHI_UPI_NAME=Your Name` give UPI app buttons on phones and a QR code on
   computers. With neither, the Pay button says payments are not switched on.

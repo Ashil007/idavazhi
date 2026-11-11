@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Contact — Vazhi</title>
+<meta name="description" content="How to reach the maker of Vazhi: email, phone or a message." />
+<meta name="theme-color" content="#0d1117" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
+<link rel="stylesheet" href="/home.css" />
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav nav--doc is-scrolled">
+  <div class="wrap nav__in">
+    <a class="logo" href="/" aria-label="Vazhi home"><img src="/icons/icon-192.png" alt="" width="36" height="36" /><span class="ml" lang="ml">വഴി</span></a>
+    <a class="btn btn--small btn--main" href="/app">Open Vazhi</a>
+  </div>
+</header>
+
+<main id="main" class="doc">
+  <div class="wrap wrap--narrow">
+    <div class="doc__head">
+      <h1>Contact</h1>
+      <p class="lead">Questions about a route, a payment or your data? Here&rsquo;s how to reach me.</p>
+    </div>
+
+    <div class="contact">
+      <section>
+        <h2>Reach the maker</h2>
+        {{CONTACT_LIST}}
+        <p class="contact__note">For a payment, please include the Razorpay payment number (it starts with &ldquo;pay_&rdquo;). I usually reply within 2 working days.</p>
+      </section>
+
+      <form class="contact__form" id="contact-form" novalidate>
+        <h2>Send a message</h2>
+        <p>A wrong route, a missing stop, a payment question, an idea: I read every message.</p>
+        <label for="contact-text">Your message</label>
+        <textarea id="contact-text" name="text" maxlength="1000" required></textarea>
+        <div class="contact__count" id="contact-count">0 / 1000</div>
+        <label for="contact-who">Your name and phone or email, if you&rsquo;d like a reply</label>
+        <input id="contact-who" name="contact" maxlength="120" autocomplete="email" />
+        <button type="submit" class="btn btn--main">Send message</button>
+        <p class="contact__msg" id="contact-msg" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <nav class="doc__links" aria-label="Policies">
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms of use</a>
+      <a href="/refunds">Refunds and cancellations</a>
+      <a href="/contact" aria-current="page">Contact</a>
+    </nav>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__in">
+    <div class="footer__brand">
+      <a class="logo" href="/"><img src="/icons/icon-192.png" alt="" width="32" height="32" /><span class="ml" lang="ml">വഴി</span><span class="sr-only">Vazhi</span></a>
+      <p>Bus, train and metro across Kerala, with an alarm before your stop. Made in Kerala.</p>
+    </div>
+    <nav class="footer__links" aria-label="Footer">
+      <a href="/app">Open Vazhi</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/refunds">Refunds</a>
+      <a href="/contact">Contact</a>
+    </nav>
+    <p class="footer__credit">&copy; 2026 {{OWNER}}. All rights reserved. Map data &copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap contributors</a>.</p>
+  </div>
+</footer>
+<script src="/contact.js"></script>
+</body>
+</html>

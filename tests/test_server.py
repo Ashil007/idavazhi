@@ -159,6 +159,16 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(h["Cross-Origin-Opener-Policy"], "same-origin-allow-popups")
         self.assertNotIn("Access-Control-Allow-Origin", h)
 
+    def test_policy_pages(self):
+        for path in ("/privacy", "/terms", "/refunds", "/contact", "/privacy.html"):
+            code, h, body = self.get(path)
+            self.assertEqual(code, 200, path)
+            self.assertTrue(h["Content-Type"].startswith("text/html"), path)
+            self.assertNotIn(b"{{", body, path)          # contact details filled in
+        _, _, home = self.get("/")
+        for path in (b"/privacy", b"/terms", b"/refunds", b"/contact"):
+            self.assertIn(b'href="' + path + b'"', home)
+
     def test_health(self):
         code, _, body = self.get("/api/health")
         self.assertEqual(code, 200)

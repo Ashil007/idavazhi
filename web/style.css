@@ -1145,6 +1145,10 @@ html, body {
 .about__msg { margin: 0; min-height: 20px; font-size: 14px; line-height: 20px; color: var(--ink-dim); }
 .about__msg.is-ok { color: #7fd3a8; }
 .about__msg.is-bad { color: var(--danger); }
+.about__legal { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 20px; padding-top: 16px;
+                border-top: 1px solid var(--line); font-size: 13px; }
+.about__legal a { color: var(--ink-dim); text-decoration: none; }
+.about__legal a:hover { color: var(--alarm); }
 
 /* the ticket: amber, with a perforated top edge like a bus ticket */
 .ticket { border-top: 2px dashed rgba(245, 182, 66, .45); }
@@ -1174,6 +1178,7 @@ html, body {
   background: var(--panel-2); }
 .ticket__qr { width: 132px; height: 132px; flex: 0 0 132px; border-radius: 8px; }
 .ticket__scan p, .ticket__note { margin: 0; font-size: 14px; line-height: 22px; color: var(--ink-dim); }
+.ticket__note a { color: var(--ink); }
 .ticket__scan b { color: var(--amber); }
 .ticket__id { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0;
   font-size: 14px; color: var(--ink-dim); }

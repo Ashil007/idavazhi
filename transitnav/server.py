@@ -20,7 +20,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import (basemap, feedback, limits, locate, overpass, places, preload, router,
-               stopnames, tickets, timings)
+               contact, stopnames, tickets, timings)
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -310,6 +310,13 @@ class Handler(BaseHTTPRequestHandler):
             extra.update({"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
         self._send(200, body, ctype, extra, cache="no-cache")
 
+    def _policy(self, filename):
+        """Privacy, terms, refunds and contact, with the owner's contact
+        details from data/vazhi.env filled in (contact.py)."""
+        with open(os.path.join(WEB_ROOT, filename), encoding="utf-8") as fh:
+            page = contact.fill(fh.read())
+        self._send(200, page.encode("utf-8"), "text/html; charset=utf-8", cache="no-cache")
+
     def _search(self, params):
         """Places for the destination box, as the user types.
 
@@ -461,6 +468,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._redirect("/app" + ("?" + parsed.query if parsed.query else ""))
             elif route == "/app":
                 self._static("index.html")         # the app itself
+            elif route in contact.PAGES or route[:-5] in contact.PAGES and route.endswith(".html"):
+                self._policy(contact.PAGES[route if route in contact.PAGES else route[:-5]])
             else:
                 self._static(route)
         except PlanError as exc:
