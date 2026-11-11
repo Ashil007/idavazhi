@@ -15,5 +15,3 @@ __pycache__/
 TAG-*.pdf
 *.TAG.pdf
 
-# Copyright filing pack (personal; rebuilt from the code)
-copyright-filing/
