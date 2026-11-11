@@ -21,6 +21,7 @@ LIMITS = {
     "stop": (30, 3600),       # stop names and new stops (stopnames.py)
     "stopvote": (200, 3600),
     "feedback": (6, 3600),    # messages to the maker (feedback.py)
+    "ticket": (20, 3600),     # Razorpay orders for bus tickets (tickets.py)
 }
 
 _lock = threading.Lock()

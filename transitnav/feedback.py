@@ -141,11 +141,13 @@ def send_waiting(limit: int = 20) -> int:
 
 
 def support() -> dict:
-    """What the "Buy me a bus ticket" card can offer: a UPI ID and/or a payment link."""
+    """What "Buy me a bus ticket" can offer: Razorpay, a UPI ID, a payment link."""
     upi = settings.get("VAZHI_UPI_ID")
     if upi and not re.fullmatch(r"[\w.\-]{2,256}@[A-Za-z][\w]{1,64}", upi):
         upi = ""
     link = settings.get("VAZHI_PAY_LINK")
     if link and not link.startswith("https://"):
         link = ""
-    return {"upi": upi, "name": settings.get("VAZHI_UPI_NAME") or "Vazhi", "link": link}
+    from . import tickets                 # here, not at the top: tickets imports feedback
+    return {"upi": upi, "name": settings.get("VAZHI_UPI_NAME") or "Vazhi", "link": link,
+            "razorpay": tickets.enabled()}

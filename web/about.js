@@ -4,7 +4,8 @@
  *   10 km past his stop) and a box to message the maker. Messages are saved
  *   on the server and sent to the maker's Telegram (feedback.py); without
  *   internet they wait on the phone (outbox.js).
- * - Buy me a bus ticket: a small amount by UPI. Kerala's minimum bus fare is
+ * - Buy me a bus ticket: a small amount through Razorpay Checkout (UPI apps,
+ *   card, net banking) when the owner has Razorpay keys; otherwise by UPI. Kerala's minimum bus fare is
  *   Rs 10, so that is the smallest ticket. "Pay" opens the UPI app on a phone
  *   and shows a QR code to scan on a computer. The UPI ID and an optional
  *   card-payment link come from the server (/api/support), so they live in
@@ -236,8 +237,72 @@ var ABOUT = (function () {
   // a computer or a phone where no UPI app answered.
   function pay() {
     if (!amount) { el("ticket-other-amt").focus(); return; }
+    if (support && support.razorpay) { razorpay(); return; }
     showScan = true;
     renderPay();
+  }
+
+  /* Razorpay: the server makes an order for the amount, Razorpay's own
+     window takes the payment, and the server checks Razorpay's signature
+     before it counts. checkout.js loads only when someone pays. */
+  var rzpLoading = null;
+  function loadCheckout() {
+    if (window.Razorpay) return Promise.resolve();
+    if (!rzpLoading) {
+      rzpLoading = new Promise(function (ok, fail) {
+        var sc = document.createElement("script");
+        sc.src = "https://checkout.razorpay.com/v1/checkout.js";
+        sc.onload = ok;
+        sc.onerror = function () { rzpLoading = null; fail(new Error("Couldn't open the payment window. Check your internet and try again.")); };
+        document.head.appendChild(sc);
+      });
+    }
+    return rzpLoading;
+  }
+  function postJSON(url, body) {
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) throw new Error(j.error || "Something went wrong. Please try again.");
+          return j;
+        });
+      });
+  }
+  function payNote(text, cls) {
+    el("ticket-pay").innerHTML = '<p class="ticket__note ' + (cls || "") + '">' + esc(text) + '</p>';
+  }
+  function razorpay() {
+    var btn = el("ticket-paybtn"), rupees = amount;
+    btn.disabled = true;
+    payNote("Opening the payment window...");
+    Promise.all([loadCheckout(), postJSON("/api/ticket/order", { amount: rupees })])
+      .then(function (r) {
+        var o = r[1];
+        var rzp = new window.Razorpay({
+          key: o.key, order_id: o.order_id, amount: o.amount, currency: o.currency,
+          name: "Vazhi", description: "A bus ticket for Vazhi's maker",
+          image: location.origin + "/icons/icon-192.png",
+          notes: { for: "Vazhi bus ticket" },
+          theme: { color: "#f5b642" },
+          handler: function (res) {
+            payNote("Checking your payment...");
+            postJSON("/api/ticket/paid", res).then(function () {
+              el("ticket-pay").innerHTML = '<div class="ticket__thanks"><b>Thank you!</b>' +
+                '<p>Your &#8377;' + rupees + ' bus ticket keeps Vazhi free for everyone.</p></div>';
+            }).catch(function () {
+              payNote("Paid - thank you! (Vazhi couldn't confirm it just now, but Razorpay has your payment.)", "is-ok");
+            });
+          },
+          modal: { ondismiss: function () { renderPay(); } }
+        });
+        rzp.on("payment.failed", function (res) {
+          payNote((res && res.error && res.error.description) || "The payment didn't go through. You can try again.", "is-bad");
+        });
+        rzp.open();
+        el("ticket-pay").innerHTML = "";
+      })
+      .catch(function (err) { payNote(err.message, "is-bad"); })
+      .then(function () { btn.disabled = !amount; });
   }
 
   function renderPay() {
@@ -245,14 +310,18 @@ var ABOUT = (function () {
     btn.textContent = amount ? "Pay ₹" + amount : "Pay";
     btn.disabled = !amount;
     // On a phone the app buttons are the Pay button: one tap opens the app.
-    btn.hidden = !!(support && support.upi && isPhone());
+    btn.hidden = !!(support && !support.razorpay && support.upi && isPhone());
     if (!support) { pay_.innerHTML = showScan ? '<p class="ticket__note">Loading...</p>' : ""; return; }
     if (support.offline) {
       pay_.innerHTML = '<p class="ticket__note">Connect to the internet to buy a ticket.</p>';
       return;
     }
     var html = "";
-    if (!support.upi && !support.link) {
+    if (support.razorpay) {
+      // Razorpay's window offers UPI apps, cards and net banking itself.
+      html = '<p class="ticket__note">Pay by UPI (Google Pay, PhonePe, Paytm...), card or net banking ' +
+             '&mdash; securely through Razorpay.</p>';
+    } else if (!support.upi && !support.link) {
       if (showScan) html = '<p class="ticket__note">Payments are not switched on yet. Thank you for wanting to help!</p>';
     } else if (support.upi && isPhone()) {
       if (!amount) {

@@ -20,7 +20,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import (basemap, feedback, limits, locate, overpass, places, preload, router,
-               stopnames, timings)
+               stopnames, tickets, timings)
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -32,14 +32,16 @@ MAX_QUERY = 120          # characters in a place search
 # Sent with every response. The policy allows only Vazhi's own scripts (the
 # map libraries are in web/vendor), Google's web fonts, the blob: worker the
 # map draws with and the blob: alarm siren (alerts.js builds the sound in the
-# page); nothing may frame the app (clickjacking).
+# page), and Razorpay Checkout for bus tickets (its script and payment
+# window); nothing may frame the app (clickjacking).
 CSP = "; ".join([
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' https://checkout.razorpay.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob:",
-    "connect-src 'self'",
+    "img-src 'self' data: blob: https://cdn.razorpay.com",
+    "connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com",
+    "frame-src https://api.razorpay.com https://checkout.razorpay.com",
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
     "child-src blob:",
@@ -172,7 +174,7 @@ class Handler(BaseHTTPRequestHandler):
     # search keystroke, map tile or file, which under load cost more to print
     # than to answer. No addresses or coordinates are logged.
     LOGGED = ("/api/plan", "/api/timings", "/api/stops/rename", "/api/stops/add",
-              "/api/stops/answer", "/api/feedback")
+              "/api/stops/answer", "/api/feedback", "/api/ticket/order", "/api/ticket/paid")
 
     def log_request(self, code="-", size="-"):
         path = (self.path or "").split("?")[0]
@@ -588,6 +590,22 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self._json(500, {"error": OOPS})
 
+    def _ticket_post(self, path):
+        """Buy me a bus ticket: a Razorpay order, then the checked payment (tickets.py)."""
+        try:
+            body = self._body()
+            if path == "/api/ticket/order":
+                self._json(200, tickets.order(body, self._client()))
+            else:
+                self._json(200, tickets.verify(body))
+        except tickets.TicketError as exc:
+            self._json(400, {"error": str(exc)})
+        except (ValueError, UnicodeDecodeError):
+            self._json(400, {"error": "Malformed request."})
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+            self._json(500, {"error": OOPS})
+
     def do_POST(self):
         """Riders' bus times, and a non-streaming /api/plan for scripts and curl."""
         parsed = urllib.parse.urlparse(self.path)
@@ -597,6 +615,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ("/api/timings", "/api/timings/vote", "/api/stops/rename",
                            "/api/stops/add", "/api/stops/answer"):
             self._timings_post(parsed.path)
+            return
+        if parsed.path in ("/api/ticket/order", "/api/ticket/paid"):
+            self._ticket_post(parsed.path)
             return
         if parsed.path == "/api/feedback":
             self._feedback_post()

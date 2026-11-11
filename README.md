@@ -249,10 +249,16 @@ git, 6 a visitor per hour).
   (`python tools/inbox.py --shortcut` makes it; `pythonw tools/inbox.py` opens it).
 - **On your phone and laptop, also from a cloud server:** create a bot with
   @BotFather in Telegram, then run `python tools/telegram_setup.py`.
-- **Bus tickets (UPI):** put `VAZHI_UPI_ID=yourname@okaxis` and
-  `VAZHI_UPI_NAME=Your Name` (optionally `VAZHI_PAY_LINK=https://...` for card
-  payments) in `data/vazhi.env`. Until then the Pay button says payments are
-  not switched on.
+- **Bus tickets (Razorpay):** in the Razorpay dashboard, *Account & Settings →
+  API Keys*, generate a key and put `VAZHI_RAZORPAY_KEY_ID=rzp_test_...` and
+  `VAZHI_RAZORPAY_KEY_SECRET=...` in `data/vazhi.env` (test keys first; swap in
+  `rzp_live_` keys after Razorpay approves the account). *Pay* then opens
+  Razorpay's window (UPI apps, card, net banking); the server makes the order
+  and checks Razorpay's signature before a ticket counts (`transitnav/tickets.py`).
+  Paid tickets show in *Vazhi Messages* and on Telegram.
+- **Without Razorpay (fallback):** `VAZHI_UPI_ID=yourname@okaxis` and
+  `VAZHI_UPI_NAME=Your Name` give UPI app buttons on phones and a QR code on
+  computers. With neither, the Pay button says payments are not switched on.
 
 ## How it works
 

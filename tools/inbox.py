@@ -3,8 +3,8 @@
     pythonw tools/inbox.py          (or the "Vazhi Messages" shortcut on your desktop)
     python tools/inbox.py --shortcut   puts that shortcut on your desktop
 
-Shows the messages from "Tell me what you think" (About Vazhi) and the stars
-riders give a trip, newest first, straight from data/feedback.db - the file
+Shows the messages from "Tell me what you think" (About Vazhi), the stars
+riders give a trip and the bus tickets they buy you (Razorpay), newest first, straight from data/feedback.db - the file
 the Vazhi server on this computer saves them in. Ones you haven't seen yet
 are in bold. It checks for new ones every 15 seconds.
 
@@ -37,21 +37,31 @@ def stars(n):
 
 
 def load():
-    """All messages and ratings, newest first."""
+    """Messages, ratings and bus tickets, newest first, as
+    (key, text, contact, page, created, sent, rating, rupees) rows; key is the
+    message id, or "t:<payment id>" for a ticket."""
     if not os.path.isfile(feedback.DB_PATH):
         return []
     db = feedback._connect()                  # adds the rating column to old files
     try:
-        return db.execute("SELECT id, text, contact, page, created, sent, rating FROM feedback"
-                          " ORDER BY id DESC").fetchall()
+        rows = [(r[0],) + tuple(r[1:]) + (None,) for r in db.execute(
+            "SELECT id, text, contact, page, created, sent, rating FROM feedback")]
+        has_tickets = db.execute("SELECT 1 FROM sqlite_master WHERE name = 'tickets'").fetchone()
+        if has_tickets:
+            rows += [("t:" + pid, "Payment " + pid, "", "Razorpay", created, sent, None, amount)
+                     for pid, amount, created, sent in db.execute(
+                         "SELECT payment_id, amount, created, sent FROM tickets")]
     finally:
         db.close()
+    return sorted(rows, key=lambda r: r[4], reverse=True)
 
 
 def read_seen():
+    """When the newest item was, last time the window closed (a Unix time)."""
     try:
         with open(SEEN_FILE, encoding="utf-8") as fh:
-            return int(fh.read().strip() or 0)
+            v = float(fh.read().strip() or 0)
+            return v if v > 1e9 else 0        # an old file held a message number
     except (OSError, ValueError):
         return 0
 
@@ -99,7 +109,7 @@ class Inbox:
         self.summary = tk.Label(top, text="", bg=BG, fg=DIM, font=base)
         self.summary.pack(side="left", padx=16)
         self.show = tk.StringVar(value="all")
-        for value, label in (("all", "All"), ("msg", "Messages"), ("rate", "Trip ratings")):
+        for value, label in (("all", "All"), ("msg", "Messages"), ("rate", "Trip ratings"), ("tk", "Bus tickets")):
             ttk.Radiobutton(top, text=label, value=value, variable=self.show,
                             command=self.refresh).pack(side="right", padx=6)
 
@@ -144,22 +154,29 @@ class Inbox:
         self.tree.delete(*self.tree.get_children())
         show = self.show.get()
         ratings = [r[6] for r in rows if r[6]]
+        paid = [r for r in rows if r[7] is not None]
         new = 0
         for r in rows:
-            _id, text, contact, page, created, sent, rating = r
-            if (show == "msg" and rating) or (show == "rate" and not rating):
+            key, text, contact, page, created, sent, rating, rupees = r
+            ticket = rupees is not None
+            kind_of = "tk" if ticket else ("rate" if rating else "msg")
+            if show != "all" and show != kind_of:
                 continue
-            is_new = _id > self.first_seen
+            is_new = created > self.first_seen
             new += is_new
             when = time.strftime("%d %b, %I:%M %p", time.localtime(created))
-            kind = stars(rating) if rating else "Message"
+            kind = ("Ticket ₹%d" % rupees) if ticket else (stars(rating) if rating else "Message")
             line = " ".join((text or ("(no comment)" if rating else "")).split())
-            self.tree.insert("", "end", iid=str(_id), values=(when, kind, contact or "-", line[:160]),
+            self.tree.insert("", "end", iid=str(key), values=(when, kind, contact or "-", line[:160]),
                              tags=("new" if is_new else "old",))
-        parts = ["%d message%s" % (len(rows) - len(ratings), "" if len(rows) - len(ratings) == 1 else "s")]
+        msgs = len(rows) - len(ratings) - len(paid)
+        parts = ["%d message%s" % (msgs, "" if msgs == 1 else "s")]
         if ratings:
             parts.append("%d rating%s, average %.1f★" % (len(ratings), "" if len(ratings) == 1 else "s",
                                                             sum(ratings) / len(ratings)))
+        if paid:
+            parts.append("₹%d from %d ticket%s" % (sum(r[7] for r in paid), len(paid),
+                                                        "" if len(paid) == 1 else "s"))
         if new:
             parts.append("%d new" % new)
         self.summary.configure(text="  ·  ".join(parts) if rows else "No messages yet")
@@ -169,7 +186,7 @@ class Inbox:
         elif not rows:
             self.show_detail(None)
         if rows:
-            self.seen = max(self.seen, rows[0][0])
+            self.seen = max(self.seen, rows[0][4])   # the newest one's time
 
     def select(self, _event=None):
         sel = self.tree.selection()
@@ -183,13 +200,19 @@ class Inbox:
             self.meta.configure(text="Riders' messages and trip ratings show up here. "
                                      "The list checks for new ones every 15 seconds (F5 checks now).")
         else:
-            _id, text, contact, page, created, sent, rating = r
-            self.head.configure(text=("Trip rating  " + stars(rating) + "  %d/5" % rating) if rating else "Message")
-            self.text.insert("1.0", text or "(no comment)")
+            key, text, contact, page, created, sent, rating, rupees = r
             when = time.strftime("%A %d %B %Y, %I:%M %p", time.localtime(created))
-            self.meta.configure(text="From: %s     ·     %s     ·     from the %s     ·     #%d     ·     %s"
-                                % (contact or "no name given", when, page or "app", _id,
-                                   "sent to Telegram" if sent else "not sent to Telegram yet"))
+            tg = "sent to Telegram" if sent else "not sent to Telegram yet"
+            if rupees is not None:
+                self.head.configure(text="Bus ticket  ₹%d" % rupees)
+                self.text.insert("1.0", "Someone bought you a ₹%d bus ticket through Razorpay.\n\n%s"
+                                 % (rupees, text))
+                self.meta.configure(text="%s     ·     checked with Razorpay's signature     ·     %s" % (when, tg))
+            else:
+                self.head.configure(text=("Trip rating  " + stars(rating) + "  %d/5" % rating) if rating else "Message")
+                self.text.insert("1.0", text or "(no comment)")
+                self.meta.configure(text="From: %s     ·     %s     ·     from the %s     ·     #%d     ·     %s"
+                                    % (contact or "no name given", when, page or "app", key, tg))
         self.text.configure(state="disabled")
 
     def tick(self):
