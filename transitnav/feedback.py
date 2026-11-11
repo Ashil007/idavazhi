@@ -140,6 +140,31 @@ def send_waiting(limit: int = 20) -> int:
     return sent
 
 
+INBOX_MAX = 2000
+
+
+def inbox() -> dict:
+    """Everything the Vazhi Messages app shows (tools/inbox.py), newest first:
+    messages and trip ratings, and the bus tickets bought through Razorpay.
+    Only ever answered to the owner's password (server.py, /api/inbox)."""
+    if not os.path.isfile(DB_PATH):
+        return {"messages": [], "tickets": []}
+    with _lock:
+        db = _connect()
+        try:
+            messages = [dict(zip(("id", "text", "contact", "page", "created", "sent", "rating"), r))
+                        for r in db.execute("SELECT id, text, contact, page, created, sent, rating"
+                                            " FROM feedback ORDER BY created DESC LIMIT ?", (INBOX_MAX,))]
+            tickets = []
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name = 'tickets'").fetchone():
+                tickets = [dict(zip(("payment_id", "amount", "created", "sent"), r))
+                           for r in db.execute("SELECT payment_id, amount, created, sent FROM tickets"
+                                               " ORDER BY created DESC LIMIT ?", (INBOX_MAX,))]
+        finally:
+            db.close()
+    return {"messages": messages, "tickets": tickets}
+
+
 def support() -> dict:
     """What "Buy me a bus ticket" can offer: Razorpay, a UPI ID, a payment link."""
     upi = settings.get("VAZHI_UPI_ID")

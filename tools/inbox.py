@@ -3,31 +3,48 @@
     pythonw tools/inbox.py          (or the "Vazhi Messages" shortcut on your desktop)
     python tools/inbox.py --shortcut   puts that shortcut on your desktop
 
-Shows the messages from "Tell me what you think" (About Vazhi), the stars
-riders give a trip and the bus tickets they buy you (Razorpay), newest first, straight from data/feedback.db - the file
-the Vazhi server on this computer saves them in. Ones you haven't seen yet
-are in bold. It checks for new ones every 15 seconds.
+Shows the messages from "Tell me what you think" (About Vazhi) and the
+contact page, the stars riders give a trip and the bus tickets they buy you
+(Razorpay), newest first. Ones you haven't seen yet are in bold. It checks
+for new ones every 15 seconds (30 when it asks a server).
 
-When Vazhi runs on a cloud server, the messages are saved there instead; then
-read them in Telegram (tools/telegram_setup.py), which works on your phone too.
+Where it reads them from:
+
+  * Vazhi runs on this computer: straight from data/feedback.db.
+  * Vazhi runs on a server (the cloud): from that server, with a password.
+
+        python tools/inbox.py --setup https://your-vazhi-address
+            makes the password (VAZHI_INBOX_TOKEN) and saves it and the
+            address (VAZHI_INBOX_URL) in data/vazhi.env here. Copy the
+            VAZHI_INBOX_TOKEN line into the server's data/vazhi.env too.
+        python tools/inbox.py --local
+            back to reading data/feedback.db on this computer.
+
+Telegram (tools/telegram_setup.py) is optional: it pings your phone as well.
 """
 
 from __future__ import annotations
 
+import json
 import os
-import sqlite3
+import secrets
 import subprocess
 import sys
+import threading
 import time
 import tkinter as tk
+import urllib.error
+import urllib.parse
+import urllib.request
 from tkinter import ttk
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from transitnav import feedback  # noqa: E402
+from transitnav import feedback, settings  # noqa: E402
 
 SEEN_FILE = os.path.join(ROOT, "data", "inbox-seen.txt")
 REFRESH_MS = 15000
+REMOTE_REFRESH_MS = 30000
 
 BG, PANEL, LINE, INK, DIM, FAINT, AMBER = "#0d1117", "#171f2b", "#2a3442", "#eef2f7", "#a3b0c2", "#6b7a8f", "#f5b642"
 
@@ -36,23 +53,63 @@ def stars(n):
     return "★" * n + "☆" * (5 - n) if n else ""
 
 
+class InboxError(Exception):
+    """Why the server's messages couldn't be fetched, in words for the owner."""
+
+
+def server():
+    """The Vazhi server to ask, or "" to read data/feedback.db here."""
+    return settings.get("VAZHI_INBOX_URL").rstrip("/")
+
+
+def safe_url(url):
+    """Only https (or this computer itself): the password must not travel in the clear."""
+    u = urllib.parse.urlparse(url)
+    if u.scheme == "https":
+        return bool(u.netloc)
+    return u.scheme == "http" and u.hostname in ("127.0.0.1", "localhost", "::1")
+
+
 def load():
     """Messages, ratings and bus tickets, newest first, as
     (key, text, contact, page, created, sent, rating, rupees) rows; key is the
     message id, or "t:<payment id>" for a ticket."""
-    if not os.path.isfile(feedback.DB_PATH):
-        return []
-    db = feedback._connect()                  # adds the rating column to old files
+    url = server()
+    return load_remote(url) if url else rows_of(feedback.inbox())
+
+
+def load_remote(url):
+    if not safe_url(url):
+        raise InboxError("VAZHI_INBOX_URL must start with https:// (run --setup again).")
+    token = settings.get("VAZHI_INBOX_TOKEN")
+    if not token:
+        raise InboxError("No password yet: run  python tools/inbox.py --setup " + url)
+    req = urllib.request.Request(url + "/api/inbox", headers={
+        "Authorization": "Bearer " + token, "User-Agent": "VazhiMessages/1"})
     try:
-        rows = [(r[0],) + tuple(r[1:]) + (None,) for r in db.execute(
-            "SELECT id, text, contact, page, created, sent, rating FROM feedback")]
-        has_tickets = db.execute("SELECT 1 FROM sqlite_master WHERE name = 'tickets'").fetchone()
-        if has_tickets:
-            rows += [("t:" + pid, "Payment " + pid, "", "Razorpay", created, sent, None, amount)
-                     for pid, amount, created, sent in db.execute(
-                         "SELECT payment_id, amount, created, sent FROM tickets")]
-    finally:
-        db.close()
+        with urllib.request.urlopen(req, timeout=12) as r:
+            return rows_of(json.loads(r.read().decode("utf-8")))
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            raise InboxError("The server refused the password. Copy the VAZHI_INBOX_TOKEN line "
+                             "from data/vazhi.env here into the server's data/vazhi.env.") from None
+        if e.code == 404:
+            raise InboxError("The server has no inbox switched on: put the VAZHI_INBOX_TOKEN line "
+                             "in its data/vazhi.env.") from None
+        if e.code == 429:
+            raise InboxError("Too many tries for now; it will work again within the hour.") from None
+        raise InboxError("The server answered %d." % e.code) from None
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        why = getattr(e, "reason", e)
+        raise InboxError("Can't reach %s (%s). Showing the last messages fetched."
+                         % (urllib.parse.urlparse(url).netloc, why)) from None
+
+
+def rows_of(data):
+    rows = [(m["id"], m["text"], m["contact"], m["page"], m["created"], m["sent"], m["rating"], None)
+            for m in data.get("messages", [])]
+    rows += [("t:" + t["payment_id"], "Payment " + t["payment_id"], "", "Razorpay",
+              t["created"], t["sent"], None, t["amount"]) for t in data.get("tickets", [])]
     return sorted(rows, key=lambda r: r[4], reverse=True)
 
 
@@ -78,6 +135,7 @@ class Inbox:
         self.rows = {}
         self.seen = read_seen()
         self.first_seen = self.seen
+        self.loading, self.result, self.error, self.last = False, None, None, []
         root.title("Vazhi Messages")
         root.geometry("980x640")
         root.minsize(720, 460)
@@ -111,8 +169,11 @@ class Inbox:
         self.show = tk.StringVar(value="all")
         for value, label in (("all", "All"), ("msg", "Messages"), ("rate", "Trip ratings"), ("tk", "Bus tickets")):
             ttk.Radiobutton(top, text=label, value=value, variable=self.show,
-                            command=self.refresh).pack(side="right", padx=6)
+                            command=lambda: self.draw(self.last)).pack(side="right", padx=6)
 
+        self.status = tk.Label(root, text="", bg=BG, fg=AMBER, font=("Segoe UI", 10), anchor="w",
+                               justify="left", wraplength=920)
+        self.status.pack(fill="x", padx=20)
         body = tk.PanedWindow(root, orient="vertical", bg=BG, sashwidth=6, bd=0)
         body.pack(fill="both", expand=True, padx=20, pady=(0, 16))
 
@@ -144,11 +205,34 @@ class Inbox:
 
         root.bind("<F5>", lambda e: self.refresh())
         root.protocol("WM_DELETE_WINDOW", self.quit)
-        self.refresh()
         self.tick()
+        self.poll()
 
     def refresh(self):
-        rows = load()
+        """Fetch in the background (a server can be slow); poll() draws it."""
+        if self.loading:
+            return
+        self.loading = True
+
+        def work():
+            try:
+                self.result = (load(), None)
+            except InboxError as e:
+                self.result = (None, str(e))
+            except Exception as e:                # a broken file must not kill the window
+                self.result = (None, "Couldn't read the messages: %s" % e)
+        threading.Thread(target=work, daemon=True).start()
+
+    def poll(self):
+        if self.result is not None:
+            rows, err = self.result
+            self.result, self.loading, self.error = None, False, err
+            if rows is not None:
+                self.last = rows
+            self.draw(self.last)
+        self.root.after(200, self.poll)
+
+    def draw(self, rows):
         self.rows = {str(r[0]): r for r in rows}
         keep = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
@@ -179,7 +263,11 @@ class Inbox:
                                                         "" if len(paid) == 1 else "s"))
         if new:
             parts.append("%d new" % new)
-        self.summary.configure(text="  ·  ".join(parts) if rows else "No messages yet")
+        text = "  ·  ".join(parts) if rows else "No messages yet"
+        where = urllib.parse.urlparse(server()).netloc if server() else "this computer"
+        self.summary.configure(text=text)
+        self.status.configure(text=self.error or "Reading from " + where,
+                              fg=AMBER if self.error else FAINT)
         self.root.title("Vazhi Messages" + (" (%d new)" % new if new else ""))
         if keep and keep[0] in self.rows and self.tree.exists(keep[0]):
             self.tree.selection_set(keep[0])
@@ -198,7 +286,7 @@ class Inbox:
         if not r:
             self.head.configure(text="")
             self.meta.configure(text="Riders' messages and trip ratings show up here. "
-                                     "The list checks for new ones every 15 seconds (F5 checks now).")
+                                     "The list checks for new ones by itself (F5 checks now).")
         else:
             key, text, contact, page, created, sent, rating, rupees = r
             when = time.strftime("%A %d %B %Y, %I:%M %p", time.localtime(created))
@@ -217,7 +305,7 @@ class Inbox:
 
     def tick(self):
         self.refresh()
-        self.root.after(REFRESH_MS, self.tick)
+        self.root.after(REMOTE_REFRESH_MS if server() else REFRESH_MS, self.tick)
 
     def quit(self):
         write_seen(self.seen)                 # next time, only newer ones are bold
@@ -243,9 +331,41 @@ def make_shortcut():
     return out.returncode
 
 
+def setup(url):
+    """Make the inbox password (once) and remember which server to ask."""
+    if url:
+        url = url.strip().rstrip("/")
+        if "://" not in url:
+            url = "https://" + url
+        if not safe_url(url):
+            print("Use an https:// address (or http://127.0.0.1:... for this computer).")
+            return 2
+    if len(settings.get("VAZHI_INBOX_TOKEN")) < 24:
+        settings.put("VAZHI_INBOX_TOKEN", secrets.token_urlsafe(32))
+        print("Made a new inbox password and saved it in data/vazhi.env (VAZHI_INBOX_TOKEN).")
+    else:
+        print("Keeping the inbox password already in data/vazhi.env (VAZHI_INBOX_TOKEN).")
+    if url:
+        settings.put("VAZHI_INBOX_URL", url)
+        print("Vazhi Messages will now read from %s." % url)
+        print("On that server, put the same VAZHI_INBOX_TOKEN line in its data/vazhi.env and restart it.")
+    return 0
+
+
+def go_local():
+    settings.put("VAZHI_INBOX_URL", "")
+    print("Vazhi Messages will read data/feedback.db on this computer again.")
+    return 0
+
+
 if __name__ == "__main__":
     if "--shortcut" in sys.argv:
         sys.exit(make_shortcut())
+    if "--setup" in sys.argv:
+        rest = sys.argv[sys.argv.index("--setup") + 1:]
+        sys.exit(setup(rest[0] if rest else ""))
+    if "--local" in sys.argv:
+        sys.exit(go_local())
     app = tk.Tk()
     Inbox(app)
     app.mainloop()

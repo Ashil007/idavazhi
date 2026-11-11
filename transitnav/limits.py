@@ -21,6 +21,7 @@ LIMITS = {
     "stop": (30, 3600),       # stop names and new stops (stopnames.py)
     "stopvote": (200, 3600),
     "feedback": (6, 3600),    # messages to the maker (feedback.py)
+    "inbox": (300, 3600),     # the owner's Messages app, every 30 s, plus wrong passwords
     "ticket": (20, 3600),     # Razorpay orders for bus tickets (tickets.py)
 }
 

@@ -10,6 +10,8 @@ again whenever it changes, so a new setting needs no restart.
     VAZHI_UPI_ID           UPI ID for "Buy me a bus ticket", e.g. name@okaxis
     VAZHI_UPI_NAME         the name the UPI app shows, e.g. Ashil J Thomas
     VAZHI_PAY_LINK         optional: a Razorpay (or other) payment page link
+    VAZHI_INBOX_TOKEN      password for /api/inbox (tools/inbox.py --setup makes it)
+    VAZHI_INBOX_URL        on the owner's computer: the server Vazhi Messages reads
 """
 
 from __future__ import annotations

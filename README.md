@@ -247,8 +247,16 @@ git, 6 a visitor per hour).
 
 - **Read them on this PC:** the *Vazhi Messages* shortcut on the desktop
   (`python tools/inbox.py --shortcut` makes it; `pythonw tools/inbox.py` opens it).
-- **On your phone and laptop, also from a cloud server:** create a bot with
-  @BotFather in Telegram, then run `python tools/telegram_setup.py`.
+  It reads `data/feedback.db` here while Vazhi runs on this computer.
+- **When Vazhi runs on a cloud server:** `python tools/inbox.py --setup
+  https://your-vazhi-address` makes a password (`VAZHI_INBOX_TOKEN` in
+  `data/vazhi.env`) and points the app at the server. Copy that one line into
+  the server's `data/vazhi.env` and restart it; the app then fetches messages,
+  ratings and tickets from `/api/inbox` over https, every 30 seconds. Without
+  the password the server answers 401, and with no password set there is no
+  inbox at all. `python tools/inbox.py --local` goes back to the file here.
+- **Phone alerts too (optional):** create a bot with @BotFather in Telegram,
+  then run `python tools/telegram_setup.py`.
 - **Bus tickets (Razorpay):** in the Razorpay dashboard, *Account & Settings →
   API Keys*, generate a key and put `VAZHI_RAZORPAY_KEY_ID=rzp_test_...` and
   `VAZHI_RAZORPAY_KEY_SECRET=...` in `data/vazhi.env` (test keys first; swap in

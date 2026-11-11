@@ -7,6 +7,7 @@ than a Python install.
 from __future__ import annotations
 
 import gzip
+import hmac
 import json
 import math
 import mimetypes
@@ -20,7 +21,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import (basemap, feedback, limits, locate, overpass, places, preload, router,
-               contact, stopnames, tickets, timings)
+               settings, contact, stopnames, tickets, timings)
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -310,6 +311,23 @@ class Handler(BaseHTTPRequestHandler):
             extra.update({"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
         self._send(200, body, ctype, extra, cache="no-cache")
 
+    def _inbox(self):
+        """Riders' messages, ratings and tickets for the owner's Messages app
+        (tools/inbox.py), which may run on another computer. Only with the
+        password in VAZHI_INBOX_TOKEN; without one set, there is no inbox."""
+        token = settings.get("VAZHI_INBOX_TOKEN")
+        if len(token) < 24:
+            self._send(404, b"Not found", "text/plain; charset=utf-8")
+            return
+        if not self._limit("inbox"):
+            return
+        given = (self.headers.get("Authorization") or "")
+        given = given[7:].strip() if given[:7].lower() == "bearer " else ""
+        if not hmac.compare_digest(given.encode("utf-8"), token.encode("utf-8")):
+            self._json(401, {"error": "Wrong password."})
+            return
+        self._json(200, feedback.inbox())
+
     def _policy(self, filename):
         """Privacy, terms, refunds and contact, with the owner's contact
         details from data/vazhi.env filled in (contact.py)."""
@@ -459,6 +477,8 @@ class Handler(BaseHTTPRequestHandler):
                 if limits.prefetch_slots.acquire(blocking=False):
                     threading.Thread(target=_prefetch, args=(point, mode), daemon=True).start()
                 self._json(202, {"ok": True})
+            elif route == "/api/inbox":
+                self._inbox()
             elif route == "/" and ("from" in params or "to" in params):
                 # A trip shared before the app moved to /app.
                 self._redirect("/app?" + parsed.query)
