@@ -22,16 +22,10 @@ var STOPS = (function () {
   function device() { return TIMES.device(); }
   function isMapStop(id) { return /^(node|way|relation)\/\d+$/.test(id || ""); }
 
-  function post(url, body) {
-    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(body) })
-      .then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) throw new Error(j.error || "Could not save that - try again.");
-          return j;
-        });
-      });
-  }
+  // Without internet the change waits on the phone (outbox.js) and is sent
+  // when it is back online; the answer is then { queued: true }.
+  function post(url, body) { return OUTBOX.post(url, body); }
+  var SAVED = "No internet right now - it's saved on this phone and will be sent when you're back online.";
 
   // Questions this browser has waved away ("Not sure", or closed): not asked
   // again for a week.
@@ -82,8 +76,9 @@ var STOPS = (function () {
           ? post("/api/stops/rename", { key: stop.id, name: name, lat: stop.lat, lon: stop.lon,
                                         map_name: stop.map_name || stop.name || "", device: device() })
           : post("/api/stops/answer", { key: stop.id, name: name, device: device() });
-        req.then(function () {
-          box.innerHTML = "Thanks! Riders who use this stop will be asked what it is called. " +
+        req.then(function (j) {
+          box.innerHTML = (j.queued ? esc(SAVED) + " " : "Thanks! ") +
+            "Riders who use this stop will be asked what it is called. " +
             "Everyone sees <b>" + esc(name) + "</b> once " + NEEDED + " riders agree.";
         }).catch(function (err) { msg.textContent = err.message; });
       });
@@ -125,7 +120,7 @@ var STOPS = (function () {
       post("/api/stops/add", { lat: latlng.lat, lon: latlng.lng, name: f.elements.name.value,
                                device: device() })
         .then(function (j) {
-          mark.setPopupContent('<div class="addstop">' + (j.merged
+          mark.setPopupContent('<div class="addstop">' + (j.queued ? esc(SAVED) + " " : j.merged
             ? "A rider already added a stop here - your answer counts for it. "
             : "Added. ") + "Riders planning trips near here will be asked about it, and it is " +
             "used for trips once " + (j.needed || NEEDED) + " riders confirm it.</div>");
@@ -239,9 +234,10 @@ var STOPS = (function () {
     var body = { key: q.key, device: device() };
     if (answer.name) body.name = answer.name;
     if (answer.exists !== undefined) body.exists = answer.exists;
-    post("/api/stops/answer", body).then(function () {
+    post("/api/stops/answer", body).then(function (j) {
       skip(q.key);
       $("ask").innerHTML = '<div class="ask__title">Thank you!</div><p class="ask__text">' +
+        (j.queued ? esc(SAVED) + " " : "") +
         "Answers like yours keep Vazhi's stops right. A name is used once " + q.needed +
         " riders agree on it.</p>";
       setTimeout(function () { if (!showing || showing === q) { hideCard(); next(); } }, 2600);

@@ -111,7 +111,11 @@ var TIMES = (function () {
         var ids = b.closest("[data-ids]").getAttribute("data-ids").split(",").map(Number);
         b.disabled = true;
         post("/api/timings/vote", { ids: ids, vote: Number(b.getAttribute("data-vote")), device: device() })
-          .then(function () { load(box, leg, null, plan); })
+          .then(function (j) {
+            if (!j.queued) return load(box, leg, null, plan);
+            b.textContent = "Saved";
+            b.title = "No internet - sent when you're back online";
+          })
           .catch(function (err) { b.disabled = false; alert(err.message); });
       });
     });
@@ -125,7 +129,14 @@ var TIMES = (function () {
         board: leg.from, toward: leg.to, time: f.elements.time.value,
         operator: f.elements.operator.value, days: f.elements.days.value,
         route: f.elements.route.value, device: device()
-      }).then(function () {
+      }).then(function (j) {
+        if (j.queued) {
+          f.reset();
+          send.disabled = false;
+          msg.textContent = "No internet right now - your time is saved on this phone and " +
+                            "will be added for everyone when you're back online.";
+          return;
+        }
         return load(box, leg, "Thanks - added for everyone boarding here.", plan);
       }).catch(function (err) {
         send.disabled = false;
@@ -232,16 +243,9 @@ var TIMES = (function () {
     }, at - Date.now()) };
   }
 
-  function post(url, body) {
-    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(body) })
-      .then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) throw new Error(j.error || "Could not save that - try again.");
-          return j;
-        });
-      });
-  }
+  // Without internet the change waits on the phone (outbox.js) and is sent
+  // when it is back online; the answer is then { queued: true }.
+  function post(url, body) { return OUTBOX.post(url, body); }
 
   function load(box, leg, thanks, plan) {
     var q = "/api/timings?blat=" + leg.from.lat + "&blon=" + leg.from.lon +

@@ -10,10 +10,10 @@
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v33";
+var CACHE = "vazhi-shell-v34";
 var SHELL = [
   "/", "/app", "home.css", "home.js", "style.css", "manifest.webmanifest",
-  "basemap.js", "sheet.js", "drawer.js", "alerts.js", "times.js", "stops.js", "install.js", "permit.js", "notice.js", "app.js",
+  "basemap.js", "sheet.js", "drawer.js", "alerts.js", "outbox.js", "times.js", "stops.js", "install.js", "permit.js", "notice.js", "app.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/favicon-32.png",
   // The sea and the basic letters of the map; map tiles stay online-only.
   "map/sea.geojson", "map/region.geojson", "fonts/Noto%20Sans%20Regular/0-255.pbf", "fonts/Noto%20Sans%20Medium/0-255.pbf",
