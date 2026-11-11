@@ -10,17 +10,17 @@
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v34";
+var CACHE = "vazhi-shell-v35";
 var SHELL = [
   "/", "/app", "home.css", "home.js", "style.css", "manifest.webmanifest",
-  "basemap.js", "sheet.js", "drawer.js", "alerts.js", "outbox.js", "times.js", "stops.js", "install.js", "permit.js", "notice.js", "app.js",
+  "basemap.js", "sheet.js", "drawer.js", "alerts.js", "outbox.js", "times.js", "stops.js", "install.js", "permit.js", "notice.js", "about.js", "app.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/favicon-32.png",
   // The sea and the basic letters of the map; map tiles stay online-only.
   "map/sea.geojson", "map/region.geojson", "fonts/Noto%20Sans%20Regular/0-255.pbf", "fonts/Noto%20Sans%20Medium/0-255.pbf",
   // The map libraries, served by Vazhi itself (web/vendor).
   "vendor/leaflet/leaflet.css", "vendor/leaflet/leaflet.js",
   "vendor/maplibre/maplibre-gl.css", "vendor/maplibre/maplibre-gl.js",
-  "vendor/maplibre/leaflet-maplibre-gl.js"
+  "vendor/maplibre/leaflet-maplibre-gl.js", "vendor/qrcode/qrcode.js"
 ];
 
 self.addEventListener("install", function (event) {

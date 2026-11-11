@@ -19,7 +19,8 @@ import urllib.parse
 from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import basemap, limits, locate, overpass, places, preload, router, stopnames, timings
+from . import (basemap, feedback, limits, locate, overpass, places, preload, router,
+               stopnames, timings)
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -148,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
     # search keystroke, map tile or file, which under load cost more to print
     # than to answer. No addresses or coordinates are logged.
     LOGGED = ("/api/plan", "/api/timings", "/api/stops/rename", "/api/stops/add",
-              "/api/stops/answer")
+              "/api/stops/answer", "/api/feedback")
 
     def log_request(self, code="-", size="-"):
         path = (self.path or "").split("?")[0]
@@ -358,6 +359,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"ok": True, "map": basemap.newest_build() is not None,
                                  "route_service": router.local_available(),
                                  "time": int(time.time())})
+            elif route == "/api/support":
+                # What "Buy me a bus ticket" can offer (UPI ID, payment link).
+                self._json(200, feedback.support())
             elif route == "/api/mapinfo":
                 self._json(200, basemap.info())
             elif route.startswith("/tiles/"):
@@ -537,6 +541,18 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self._json(500, {"error": OOPS})
 
+    def _feedback_post(self):
+        """A rider's message to the maker (feedback.py)."""
+        try:
+            self._json(200, {"ok": True, "id": feedback.add(self._body(), self._client())})
+        except feedback.FeedbackError as exc:
+            self._json(400, {"error": str(exc)})
+        except (ValueError, UnicodeDecodeError):
+            self._json(400, {"error": "Malformed request."})
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+            self._json(500, {"error": OOPS})
+
     def do_POST(self):
         """Riders' bus times, and a non-streaming /api/plan for scripts and curl."""
         parsed = urllib.parse.urlparse(self.path)
@@ -546,6 +562,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ("/api/timings", "/api/timings/vote", "/api/stops/rename",
                            "/api/stops/add", "/api/stops/answer"):
             self._timings_post(parsed.path)
+            return
+        if parsed.path == "/api/feedback":
+            self._feedback_post()
             return
         if parsed.path != "/api/plan":
             self._send(404, b"Not found", "text/plain; charset=utf-8")

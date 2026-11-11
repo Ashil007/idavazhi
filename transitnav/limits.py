@@ -20,6 +20,7 @@ LIMITS = {
     "vote": (120, 3600),
     "stop": (30, 3600),       # stop names and new stops (stopnames.py)
     "stopvote": (200, 3600),
+    "feedback": (6, 3600),    # messages to the maker (feedback.py)
 }
 
 _lock = threading.Lock()

@@ -846,6 +846,7 @@ html, body {
   .panel__head { order: 11; margin-top: 22px; }
   .offline { order: 12; }
   .addstop-btn { order: 13; }
+  .about-row { order: 13; }
   .panel__foot { order: 14; }
   /* The boxes and buttons explain themselves; their titles cost a line each. */
   #points-block .block__title { display: none; }
@@ -1085,3 +1086,103 @@ html, body {
   .drawer-open .leaflet-control-zoom { visibility: hidden; }
 }
 @media (max-width: 860px) and (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+
+/* ------------------------------------------------------------------ about
+   About Vazhi (about.js): the story, a message box, "Buy me a bus ticket".
+   Above the panel and drawer, under the location gate and the stop alarm. */
+.about-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.about-row .ghost { margin-top: 0; font-size: 15px; padding: 0 12px; }
+.ticket-btn { display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--amber-soft); color: var(--amber); }
+.ticket-btn:hover { background: rgba(245, 182, 66, .2); color: #ffc65a; }
+.ticket-btn svg, .ticket__icon { width: 20px; height: 20px; flex: 0 0 20px; }
+
+.about {
+  position: fixed; inset: 0; z-index: 4400; overflow-y: auto;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgba(8,10,14,.78);
+  animation: notice-fade .18s ease-out;
+}
+.about[hidden] { display: none; }
+.about__card {
+  position: relative; width: min(520px, 100%); margin: auto; padding: 32px 24px 24px;
+  border-radius: 20px; background: var(--panel); box-shadow: var(--sh-5);
+}
+.about__close {
+  position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; border: 0; border-radius: 50%;
+  background: var(--panel-2); color: var(--ink-dim); font-size: 26px; line-height: 1; cursor: pointer;
+}
+.about__close:hover { background: var(--panel-3); color: var(--ink); }
+.about__close:focus-visible, .about__send:focus-visible, .ticket__amt:focus-visible,
+.ticket__open:focus-visible, .ticket__copy:focus-visible, .ticket__card:focus-visible {
+  outline: 3px solid var(--amber); outline-offset: 2px; }
+.about__eyebrow { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--amber); }
+.about__title { margin: 0 56px 12px 0; font-size: 24px; line-height: 32px; letter-spacing: -.01em; }
+.about__story { margin: 0; font-size: 16px; line-height: 26px; color: var(--ink-dim); }
+.about__by { margin: 12px 0 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+
+.about__sec { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+.about__sec h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px;
+  font-size: 18px; line-height: 26px; }
+.about__hint { margin: 0 0 16px; font-size: 14px; line-height: 22px; color: var(--ink-dim); }
+
+.about__form { display: flex; flex-direction: column; gap: 8px; }
+.about__form textarea, .about__form input, .ticket__other input {
+  width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--panel-2); color: var(--ink); font: inherit; font-size: 16px;
+}
+.about__form textarea { min-height: 112px; resize: vertical; line-height: 24px; }
+.about__form textarea:focus, .about__form input:focus, .ticket__other input:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.about__count { margin-top: -4px; text-align: right; font-size: 12px; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums; }
+.about__send {
+  min-height: 48px; border: 0; border-radius: 14px; cursor: pointer;
+  background: var(--accent); color: #04101e; font: inherit; font-size: 16px; font-weight: 700;
+}
+.about__send:disabled { opacity: .6; cursor: progress; }
+.about__msg { margin: 0; min-height: 20px; font-size: 14px; line-height: 20px; color: var(--ink-dim); }
+.about__msg.is-ok { color: #7fd3a8; }
+.about__msg.is-bad { color: var(--danger); }
+
+/* the ticket: amber, with a perforated top edge like a bus ticket */
+.ticket { border-top: 2px dashed rgba(245, 182, 66, .45); }
+.ticket h3 { color: var(--amber); }
+.ticket__amts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ticket__amt {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px;
+  padding: 8px 4px; border: 1px solid transparent; border-radius: 12px; cursor: pointer;
+  background: var(--panel-2); color: var(--ink); font: inherit;
+}
+.ticket__amt b { font-size: 18px; line-height: 24px; font-variant-numeric: tabular-nums; }
+.ticket__amt span { font-size: 12px; line-height: 16px; color: var(--ink-faint); }
+.ticket__amt:hover { background: var(--panel-3); }
+.ticket__amt.is-on { background: var(--amber-soft); border-color: var(--amber); }
+.ticket__amt.is-on b { color: var(--amber); }
+.ticket__other { display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  font-size: 18px; font-weight: 700; color: var(--amber); }
+.ticket__other[hidden] { display: none; }
+.ticket__pay { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.ticket__open, .ticket__card {
+  display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 14px;
+  text-decoration: none; font-size: 17px; font-weight: 700;
+}
+.ticket__open { background: var(--amber); color: var(--amber-ink); box-shadow: 0 8px 24px rgba(245, 182, 66, .25); }
+.ticket__card { background: var(--panel-2); color: var(--ink); }
+.ticket__scan { display: flex; align-items: center; gap: 16px; padding: 12px; border-radius: 14px;
+  background: var(--panel-2); }
+.ticket__qr { width: 132px; height: 132px; flex: 0 0 132px; border-radius: 8px; }
+.ticket__scan p, .ticket__note { margin: 0; font-size: 14px; line-height: 22px; color: var(--ink-dim); }
+.ticket__scan b { color: var(--amber); }
+.ticket__id { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0;
+  font-size: 14px; color: var(--ink-dim); }
+.ticket__id b { color: var(--ink); word-break: break-all; }
+.ticket__copy { margin-left: auto; min-height: 36px; padding: 0 14px; border: 0; border-radius: 10px;
+  background: var(--panel-3); color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+@media (max-width: 420px) {
+  .about__card { padding: 28px 16px 20px; }
+  .ticket__amts { grid-template-columns: repeat(2, 1fr); }
+  .ticket__qr { width: 112px; height: 112px; flex-basis: 112px; }
+}

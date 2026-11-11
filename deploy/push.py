@@ -21,6 +21,7 @@ import sys
 import tarfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SETTINGS = "data/vazhi.env"
 REMOTE_USER = "ubuntu"
 SAFE_KEY = os.path.join(os.path.expanduser("~"), ".ssh", "vazhi-cloud.key")
 
@@ -35,6 +36,9 @@ def files_to_send():
         for n in names:
             if n.endswith(".pbf"):
                 out.append(os.path.relpath(os.path.join(base, n), ROOT).replace("\\", "/"))
+    # The owner's private settings (Telegram bot, UPI ID), kept out of git.
+    if os.path.isfile(os.path.join(ROOT, SETTINGS)):
+        out.append(SETTINGS)
     return sorted(set(out))
 
 
@@ -43,7 +47,12 @@ def build_archive(path):
     with tarfile.open(path, "w:gz") as tar:
         for rel in names:
             full = os.path.join(ROOT, rel)
-            if rel.endswith(".sh") or rel.endswith(".py"):
+            if rel == SETTINGS:
+                info = tar.gettarinfo(full, rel)
+                info.mode = 0o600          # bot token and the like: the app's user only
+                with open(full, "rb") as fh:
+                    tar.addfile(info, fh)
+            elif rel.endswith(".sh") or rel.endswith(".py"):
                 # Windows line endings break shell scripts on Linux.
                 data = open(full, "rb").read().replace(b"\r\n", b"\n")
                 info = tar.gettarinfo(full, rel)
