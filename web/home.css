@@ -122,9 +122,9 @@ p { margin: 0; }
 .hero h1 { font-size: clamp(38px, 9vw, 68px); font-weight: 800; letter-spacing: -.035em; }
 .hero h1 em { font-style: normal; color: var(--alarm); }
 .lead { margin-top: 20px; font-size: clamp(19px, 2.4vw, 22px); line-height: 1.55; color: var(--ink-dim); max-width: 600px; }
-/* the words that matter: a see-through alarm-yellow box behind bold white
-   text, like a text selection; kept on one line so the box never splits */
-.hl { background: rgb(245 182 66 / .3); color: var(--ink); font-weight: 700; white-space: nowrap;
+/* the words that matter: a solid alarm-yellow box (the theme's yellow) with
+   dark text, like the main button; kept on one line so the box never splits */
+.hl { background: var(--alarm); color: var(--alarm-ink); font-weight: 700; white-space: nowrap;
   padding: .04em .22em; border-radius: 4px; }
 .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
 .cta .btn { flex: 1 1 220px; }
