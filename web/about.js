@@ -458,20 +458,18 @@ var ABOUT = (function () {
   }
 
   function askRating(demo, where) {
-    if (!demo) {
-      try {
-        var last = Number(window.localStorage.getItem(ASKED_KEY) || 0);
-        if (Date.now() - last < ASK_EVERY_MS) return;
-        window.localStorage.setItem(ASKED_KEY, String(Date.now()));
-      } catch (e) { /* no storage: ask anyway */ }
-    }
-    rateDemo = !!demo;
+    if (demo) return; // Never show feedback/rating prompt for demo mode
+    try {
+      var last = Number(window.localStorage.getItem(ASKED_KEY) || 0);
+      if (Date.now() - last < ASK_EVERY_MS) return;
+      window.localStorage.setItem(ASKED_KEY, String(Date.now()));
+    } catch (e) { /* no storage: ask anyway */ }
+    rateDemo = false;
     rate.show();
     setStars(0);
     el("rate-form").reset();
     el("rate-msg").textContent = "";
-    el("rate-where").textContent = (demo ? "Demo ride done" : "Trip done") +
-      (where && where !== "your stop" ? " · " + where : "");
+    el("rate-where").textContent = "Trip done" + (where && where !== "your stop" ? " · " + where : "");
   }
 
   /* ---------------------------------------------------------- start */

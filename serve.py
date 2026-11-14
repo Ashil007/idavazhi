@@ -26,6 +26,8 @@ def main() -> int:
                     help="an extra copy of the app beside the main one (the cloud server "
                          "runs one per processor core): it only answers requests and "
                          "leaves downloading and index building to the main copy")
+    ap.add_argument("--reload", action="store_true",
+                    help="automatically reload the server when Python files are modified")
     args = ap.parse_args()
 
     from transitnav import preload
@@ -64,6 +66,11 @@ def main() -> int:
         from transitnav import places
         places.build_in_background(log=lambda m: print(m, flush=True))
 
+    # Automated daily lock-free hot backup of live SQLite databases.
+    if not args.worker:
+        from transitnav import backup
+        backup.start_daily_backup()
+
     url = "http://%s:%d/" % (args.host, args.port)
     print("Vazhi is running at " + url)
     print("Map data (c) OpenStreetMap contributors. Press Ctrl+C to stop.")
@@ -74,9 +81,37 @@ def main() -> int:
     def stop(signum, frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, stop)
+
+    last_reload_check = time.time()
+    py_mtimes = {}
+    if args.reload:
+        import os
+        root_dir = os.path.dirname(os.path.abspath(__file__))
+        def scan_mtimes():
+            m = {}
+            for r, _, fns in os.walk(os.path.join(root_dir, "transitnav")):
+                for fn in fns:
+                    if fn.endswith(".py"):
+                        p = os.path.join(r, fn)
+                        try:
+                            m[p] = os.path.getmtime(p)
+                        except OSError:
+                            pass
+            return m
+        py_mtimes = scan_mtimes()
+
     try:
         while True:
             time.sleep(0.5)
+            if args.reload and time.time() - last_reload_check > 1.0:
+                last_reload_check = time.time()
+                cur = scan_mtimes()
+                if any(cur.get(p) != mt for p, mt in py_mtimes.items()):
+                    print("\n[Auto-reload] Code changed on disk. Restarting server...")
+                    httpd.shutdown()
+                    httpd.server_close()
+                    import os
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
     except KeyboardInterrupt:
         print("\nShutting down.")
         httpd.shutdown()

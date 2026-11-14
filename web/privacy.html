@@ -5,18 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Privacy policy — Vazhi</title>
 <meta name="description" content="What Vazhi keeps about you, what it sends where, and how to have it deleted." />
-<meta name="theme-color" content="#fbf8f3" />
+<meta name="theme-color" content="#fbf7ee" data-dark="#12110d" />
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
 <link rel="stylesheet" href="/home.css" />
+<script src="/theme.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="nav nav--doc is-scrolled">
   <div class="wrap nav__in">
     <a class="logo" href="/" aria-label="Vazhi home"><img src="/icons/icon-192.png" alt="" width="36" height="36" /><span class="ml" lang="ml">വഴി</span></a>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+      <svg class="theme-toggle__moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+      <svg class="theme-toggle__sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+    </button>
     <a class="btn btn--small btn--main" href="/app">Open Vazhi</a>
   </div>
 </header>

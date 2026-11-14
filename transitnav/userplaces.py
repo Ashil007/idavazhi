@@ -42,7 +42,10 @@ class PlaceError(TimingError):
 
 def _connect():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    db = sqlite3.connect(DB_PATH, timeout=10)
+    db = sqlite3.connect(DB_PATH, timeout=15)
+    db.execute("PRAGMA journal_mode = WAL;")
+    db.execute("PRAGMA busy_timeout = 5000;")
+    db.execute("PRAGMA synchronous = NORMAL;")
     db.execute("""CREATE TABLE IF NOT EXISTS places (
         id INTEGER PRIMARY KEY, name TEXT NOT NULL, norm TEXT NOT NULL, kind TEXT NOT NULL,
         lat REAL NOT NULL, lon REAL NOT NULL, device TEXT NOT NULL, created REAL NOT NULL)""")

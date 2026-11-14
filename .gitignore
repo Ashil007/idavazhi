@@ -15,3 +15,5 @@ __pycache__/
 TAG-*.pdf
 *.TAG.pdf
 
+# Editor & agent configs
+.claude/

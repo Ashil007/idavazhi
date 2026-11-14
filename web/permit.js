@@ -79,9 +79,7 @@ var PERMIT = (function () {
              "and allow <b>Location</b> and <b>Notifications</b>. Then come back here.";
     }
     if (isAndroid()) {
-      return "Tap the icon at the left of the address bar (&#9881; or &#128274;), then " +
-             "<b>Permissions</b>, and set <b>Location</b> and <b>Notifications</b> to " +
-             "<b>Allow</b>. Then come back here.";
+      return "Tap the <b>tune or lock icon</b> (&#127898; or &#128274;) next to the website address (or the <b>three dots menu &#8942; &rarr; Info &#9432;</b>), tap <b>Permissions</b>, and change <b>Location</b> and <b>Notifications</b> to <b>Allow</b>. Then come back here.";
     }
     return "Click the icon at the left of the address bar, and set <b>Location</b> and " +
            "<b>Notifications</b> to <b>Allow</b>.";

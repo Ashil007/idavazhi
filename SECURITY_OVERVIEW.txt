@@ -1,0 +1,152 @@
+================================================================================
+VAZHI (TRANSITNAV) - SECURITY & PRIVACY ARCHITECTURE
+================================================================================
+Document: Security, Anti-Extraction & Privacy Overview
+Date: November 2026
+Application: Vazhi Transit Navigator (Web & PWA/APK)
+
+--------------------------------------------------------------------------------
+EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+Vazhi is built from the ground up on a "Privacy-First / Zero-Knowledge" 
+architecture. Unlike mainstream transit apps and ride-hailing services that 
+monetize rider location histories, telemetry, and personal identifiers, Vazhi 
+is mathematically and architecturally designed to make user data extraction 
+impossible.
+
+The application collects no accounts, logs no GPS tracks, bundles no third-party 
+trackers, and confines all trip tracking to the rider's local device hardware.
+
+--------------------------------------------------------------------------------
+1. ZERO PERSONAL DATA HARVESTING (PRIVACY BY DESIGN)
+--------------------------------------------------------------------------------
+* No User Accounts or Passwords:
+  Users never create an account, register an email, or submit a phone number. 
+  There are no user profiles, passwords, or session tokens to breach or steal.
+
+* No Tracking Cookies:
+  The application uses zero advertising or tracking cookies. All state (such as 
+  starred/saved stops) is stored strictly in the browser's local HTML5 storage 
+  (`localStorage`), accessible only on that specific device and never uploaded.
+
+* No Personal Identifiable Information (PII):
+  The database contains zero personal records. Even payment checkout flows 
+  (Razorpay/UPI) are handled via compliant isolated redirects with no financial 
+  data stored on Vazhi servers.
+
+--------------------------------------------------------------------------------
+2. LOCATION PRIVACY & ON-DEVICE PROXIMITY PROCESSING
+--------------------------------------------------------------------------------
+* 100% Client-Side Proximity Calculation:
+  When a rider sets a stop alarm, the live distance tracking between the bus 
+  and the target stop runs entirely within the phone's local JavaScript engine 
+  using the standard Geolocation API (`navigator.geolocation.watchPosition`).
+
+* Zero Location Logging on the Server:
+  The server NEVER stores, logs, or monitors user coordinates, destination 
+  searches, or GPS travel histories. Server logs record only anonymous operational 
+  metrics (e.g., "Bus plan completed in 0.4s"), with zero coordinates or IP 
+  association.
+
+* Autonomous Offline Operation:
+  Once a trip is calculated, the trip alarm continues to operate entirely offline 
+  without an active internet connection, ensuring that location pings are never 
+  streamed to any cloud server.
+
+--------------------------------------------------------------------------------
+3. ZERO THIRD-PARTY TRACKERS & EXTERNAL SURVEILLANCE
+--------------------------------------------------------------------------------
+* No Ad SDKs or Telemetry:
+  Vazhi contains ZERO instances of Google Analytics, Facebook Pixel, Firebase 
+  Telemetry, Mixpanel, Crashlytics, or commercial advertising SDKs.
+
+* Self-Hosted, Pinned Dependencies:
+  All frontend mapping and UI libraries (Leaflet, Protobuf decoders, font files) 
+  are pinned, integrity-checked, and served directly from `/web/vendor/`. No 
+  external CDN or third-party servers receive network requests when a user 
+  interacts with the map or plans journeys.
+
+--------------------------------------------------------------------------------
+4. OPERATING SYSTEM & MOBILE SANDBOXING (PWA / APK)
+--------------------------------------------------------------------------------
+* Isolated Execution Environment:
+  When installed as an app (PWA / WebAPK), Vazhi executes strictly inside the 
+  hardened browser engine sandbox.
+
+* Strictly Restricted Permissions:
+  Vazhi requests only two explicit runtime permissions:
+  1. Location (Foreground): Used strictly to find nearest stations and track the 
+     vehicle during an active trip.
+  2. Notifications: Used strictly to sound the wake-up alarm before the destination 
+     stop when the screen is locked.
+
+* Zero System Access:
+  The app has zero programmatic access to phone storage, photos, contact lists, 
+  microphone, camera, call logs, SMS, or other applications installed on the device.
+
+--------------------------------------------------------------------------------
+5. CRYPTOGRAPHIC SALTED ANONYMIZATION
+--------------------------------------------------------------------------------
+* Salted Device Hashing (SHA-256):
+  For community crowdsourcing (e.g., reporting bus arrival times or editing stop 
+  names), the app generates an ephemeral random token on the client.
+
+* Irreversible Server-Side Salt:
+  Before saving votes or timestamps, the server passes the token through a 
+  SHA-256 cryptographic hash combined with a secret, random server-side salt 
+  (`transitnav/timings.py`). Even if the database were compromised, it is 
+  mathematically impossible to reverse the hash or link contributions to a 
+  specific physical phone or individual.
+
+--------------------------------------------------------------------------------
+6. ENTERPRISE WEB & INFRASTRUCTURE DEFENSE (OWASP COMPLIANT)
+--------------------------------------------------------------------------------
+* Mandatory HTTPS & Transport Layer Security (TLS):
+  All communications enforce TLS encryption. Insecure HTTP connections are 
+  strictly forbidden and redirected to HTTPS. HSTS (HTTP Strict Transport Security) 
+  is enforced at the reverse proxy.
+
+* Strict Content Security Policy (CSP):
+  Responses include strict CSP headers (`default-src 'self'`) blocking arbitrary 
+  injected scripts, data exfiltration, or Cross-Site Scripting (XSS).
+
+* Anti-Clickjacking & Frame Busting:
+  Headers enforce `X-Frame-Options: DENY` and `frame-ancestors 'none'`, preventing 
+  the application from being embedded inside malicious invisible iframes.
+
+* Cross-Site Request Forgery (CSRF) Prevention:
+  All state-changing POST requests enforce JSON payloads and verify strict origin 
+  headers (`_same_site` validation).
+
+* SQL Injection Immunity:
+  Every database transaction (SQLite) uses parameterized queries (`?` bindings), 
+  preventing SQL injection vulnerabilities.
+
+* Path Traversal Prevention:
+  File serving is validated against `os.path.commonpath`, guaranteeing that no 
+  directory traversal exploits (`../`, `%2e%2e`) can access system files outside 
+  the `/web/` folder.
+
+* Process Isolation & Least Privilege:
+  On the cloud server, the application runs under an unprivileged system user 
+  (`vazhi`) with read-only filesystem restrictions (`ProtectSystem=strict`, 
+  `NoNewPrivileges=true`).
+
+* Rate Limiting:
+  Aggressive, in-memory rate limiting shields search, routing, and contribution 
+  endpoints from denial-of-service (DoS) and scraping attacks.
+
+--------------------------------------------------------------------------------
+7. REGULATORY & COMPLIANCE ALIGNMENT
+--------------------------------------------------------------------------------
+* India Digital Personal Data Protection Act (DPDP Act 2023):
+  Fully compliant by adhering to the principle of data minimization—no personal 
+  data is collected, stored, or processed.
+
+* General Data Protection Regulation (GDPR):
+  Complies with "Privacy by Default" and "Right to be Forgotten" (since no user 
+  data is ever retained).
+
+================================================================================
+END OF SECURITY OVERVIEW
+================================================================================

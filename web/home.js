@@ -121,7 +121,7 @@
   onScroll();
 
   if ("IntersectionObserver" in window) {
-    var items = document.querySelectorAll(".pain, .feature, .step, .getcard, .laptop, .faq details");
+    var items = document.querySelectorAll(".pain, .feature, .step, .getcard, .laptop, .faq details, .numbers__in > div");
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (en) {
         if (en.isIntersecting) { en.target.classList.add("is-in"); io.unobserve(en.target); }
@@ -162,6 +162,7 @@
 
   // The full guide: light up the topic being read in the topic list.
   var toc = document.querySelectorAll(".guide__toc a");
+  var guideBody = document.querySelector(".guide__body");
   if (toc.length && "IntersectionObserver" in window) {
     var spy = new IntersectionObserver(function (entries) {
       entries.forEach(function (en) {
@@ -170,8 +171,25 @@
           a.classList.toggle("is-here", a.getAttribute("href") === "#" + en.target.id);
         });
       });
-    }, { rootMargin: "-30% 0px -60% 0px" });
+    }, { root: guideBody, rootMargin: "-10% 0px -70% 0px" });
     document.querySelectorAll(".chapter").forEach(function (c) { spy.observe(c); });
+  }
+
+  // Smooth scroll within the guide body when clicking TOC links
+  if (guideBody && toc.length) {
+    toc.forEach(function (a) {
+      a.addEventListener("click", function (e) {
+        var href = a.getAttribute("href");
+        if (href && href.charAt(0) === "#") {
+          var target = document.querySelector(href);
+          if (target && guideBody.contains(target)) {
+            e.preventDefault();
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+            if (history.pushState) history.pushState(null, null, href);
+          }
+        }
+      });
+    });
   }
 
   // The three-bar menu on phones: open and close it; a tap on a section,
@@ -191,5 +209,34 @@
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !drop.hidden) { setMenu(false); menuBtn.focus(); }
     });
+  }
+
+  // "You pick how early it rings": the chips move the bell along the line to
+  // where the alarm would ring, and the sentence under it says it in words.
+  var ring = $("ring");
+  if (ring) {
+    var chips = Array.prototype.slice.call(ring.querySelectorAll("[role=radio]"));
+    var share = { "0.5": 10, "1": 18, "2": 30, "3": 42, "5": 60, "10": 86 };   // % of the line, not to scale
+    var choose = function (chip, focus) {
+      chips.forEach(function (c) {
+        var on = c === chip;
+        c.setAttribute("aria-checked", String(on));
+        c.tabIndex = on ? 0 : -1;
+      });
+      var w = share[chip.dataset.km] || 30;
+      $("ring-zone").style.width = w + "%";
+      $("ring-bus").style.left = (100 - w) + "%";
+      $("ring-km").textContent = chip.dataset.say;
+      $("ring-min").textContent = chip.dataset.min + " minutes";
+      if (focus) chip.focus();
+    };
+    chips.forEach(function (chip, i) {
+      chip.addEventListener("click", function () { choose(chip); });
+      chip.addEventListener("keydown", function (e) {
+        var step = (e.key === "ArrowRight" || e.key === "ArrowDown") ? 1 : (e.key === "ArrowLeft" || e.key === "ArrowUp") ? -1 : 0;
+        if (step) { e.preventDefault(); choose(chips[(i + step + chips.length) % chips.length], true); }
+      });
+    });
+    choose(chips[0]);
   }
 })();

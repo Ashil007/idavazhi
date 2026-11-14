@@ -21,7 +21,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import (basemap, feedback, limits, locate, overpass, places, preload, router,
-               settings, contact, livetrains, stopnames, tickets, timings, userplaces)
+               settings, contact, livetrains, stopnames, tickets, timings, userplaces, voice)
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
 
@@ -66,6 +66,7 @@ OOPS = "Something went wrong on our side. Please try again."
 mimetypes.add_type("application/geo+json", ".geojson")
 _gz_cache = {}          # path -> (mtime, gzipped bytes)
 _search_cache = {}      # (query, full, near) -> (time, answer)
+_places_mtime = 0
 SEARCH_CACHE_S = 600
 SEARCH_CACHE_MAX = 3000
 _gz_lock = threading.Lock()
@@ -354,6 +355,19 @@ class Handler(BaseHTTPRequestHandler):
         except (KeyError, IndexError, ValueError):
             near = None
         full = (params.get("full") or ["0"])[0] == "1"
+        # Hot-reload places module if places.py was modified on disk
+        global _places_mtime
+        try:
+            pfile = getattr(places, "__file__", None)
+            if pfile and os.path.exists(pfile):
+                mt = os.path.getmtime(pfile)
+                if _places_mtime and mt != _places_mtime:
+                    import importlib
+                    importlib.reload(places)
+                    _search_cache.clear()
+                _places_mtime = mt
+        except Exception:
+            pass
         # Many riders type the same first letters near the same places: keep
         # recent answers (keyed to about a kilometre) for ten minutes.
         key = (q.lower(), full, near and (round(near[0], 2), round(near[1], 2)))
@@ -382,6 +396,32 @@ class Handler(BaseHTTPRequestHandler):
                 _search_cache.pop(next(iter(_search_cache)))
             _search_cache[key] = (time.time(), answer)
         self._json(200, answer)
+
+    def _voice(self, params):
+        """One spoken alarm line as MP3 (voice.py), stitched from saved
+        pieces: fixed Malayalam phrases and the stop's name. Pieces not yet
+        saved are made by ElevenLabs. 404 when voice clips are not switched
+        on, so the app uses the phone's own voice."""
+        def arg(key):
+            return (params.get(key) or [""])[0][:120]
+        try:
+            parts = voice.pieces(arg("kind"), arg("name"), arg("ml"))
+        except voice.VoiceError as exc:
+            self._json(400, {"error": str(exc)})
+            return
+        if voice.missing(parts):
+            if not voice.enabled():
+                self._send(404, b"Not found", "text/plain; charset=utf-8")
+                return
+            if not self._limit("voice"):          # only new pieces cost anything
+                return
+        try:
+            data, _ = voice.announcement(parts)
+        except voice.VoiceError as exc:
+            self._json(503, {"error": str(exc)})
+            return
+        # A line never changes, so the phone may keep it for a month.
+        self._send(200, data, "audio/mpeg", cache="public, max-age=2592000")
 
     def _tile(self, route):
         """/tiles/{z}/{x}/{y}.pbf from the local map (see basemap.py)."""
@@ -432,6 +472,13 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/api/support":
                 # What "Buy me a bus ticket" can offer (UPI ID, payment link).
                 self._json(200, feedback.support())
+            elif route == "/api/voice/lines":
+                # The alarm's Malayalam words, for the phone's own voice when
+                # there is no clip.
+                self._json(200, {"enabled": voice.enabled(), "lines": voice.LINES,
+                                 "voice": voice.version()})
+            elif route == "/api/voice":
+                self._voice(params)
             elif route == "/api/mapinfo":
                 self._json(200, basemap.info())
             elif route.startswith("/tiles/"):
@@ -451,7 +498,10 @@ class Handler(BaseHTTPRequestHandler):
                                               "internet connection (%s)." % exc})
             elif route == "/api/status":
                 with preload._lock:
-                    self._json(200, {"preload": dict(preload.status)})
+                    st = {"preload": dict(preload.status)}
+                st["active_users_5m"] = limits.active_count(300)
+                st["active_users_1h"] = limits.active_count(3600)
+                self._json(200, st)
             elif route == "/api/timings":
                 board = _coord(params, "blat", "blon")
                 alight = _coord(params, "alat", "alon")

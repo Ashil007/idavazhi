@@ -26,6 +26,7 @@ LIMITS = {
     "feedback": (6, 3600),    # messages to the maker (feedback.py)
     "inbox": (300, 3600),     # the owner's Messages app, every 30 s, plus wrong passwords
     "ticket": (20, 3600),     # Razorpay orders for bus tickets (tickets.py)
+    "voice": (60, 3600),      # new spoken alarm lines from ElevenLabs (voice.py)
 }
 
 _lock = threading.Lock()
@@ -68,6 +69,30 @@ def reset() -> None:
     """For tests."""
     with _lock:
         _hits.clear()
+
+
+def active_count(window_s: float = 300.0) -> int:
+    """Number of unique visitors who made a request in the last window_s seconds."""
+    now = time.monotonic()
+    with _lock:
+        clients = {client for (_, client), q in _hits.items() if q and (now - q[-1]) <= window_s}
+    return len(clients)
+
+
+def active_summary(window_s: float = 300.0) -> dict:
+    """Breakdown of active users and recent actions."""
+    now = time.monotonic()
+    users = {}
+    with _lock:
+        for (kind, client), q in _hits.items():
+            recent_count = sum(1 for t in q if (now - t) <= window_s)
+            if recent_count > 0:
+                users.setdefault(client, {})[kind] = recent_count
+    return {
+        "active_users": len(users),
+        "window_s": int(window_s),
+        "by_client": users
+    }
 
 
 # Planning is the heavy part (seconds of work each). Past this many at once,

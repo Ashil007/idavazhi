@@ -538,6 +538,10 @@ def _sound_query(text, join=" AND "):
 # they lift places of that sort instead. Common typos are included.
 _BUS = r"(?:bus|buss|bust|bas|bs)"
 _STOP = r"(?:stop|stops|stopp|stp|sotp|stoop)"
+_STATION = r"(?:railway\s*station|train\s*station|railway\s*stn|rly\s*station|rly\s*stn|railway|train)"
+_METRO = r"(?:metro\s*station|metro\s*stn|metro)"
+_AIRPORT = r"(?:airport|aerodrome|air\s*port)"
+
 _HINTS = [
     (re.compile(r"\b(?:%s\s*%s|%s|busstp|bustop|bustopp)\b" % (_BUS, _STOP, "busstop"), re.I),
      ("Bus stop", "Bus stand")),
@@ -545,6 +549,9 @@ _HINTS = [
      ("Bus stand", "Bus stop")),
     (re.compile(r"\b%s\b" % _STOP, re.I), ("Bus stop", "Bus stand")),
     (re.compile(r"\b(?:junction|jn|jnc|jct|jun)\b\.?", re.I), ("junction",)),
+    (re.compile(r"\b(?:%s)\b" % _STATION, re.I), ("Station",)),
+    (re.compile(r"\b(?:%s)\b" % _METRO, re.I), ("Metro station",)),
+    (re.compile(r"\b(?:%s)\b" % _AIRPORT, re.I), ("Airport",)),
 ]
 
 
@@ -622,35 +629,59 @@ def search(text, near=None, limit=8):
     for name, kind, weight, lat, lon, place_near, alt, rank, exact in rows.values():
         low = name.lower()
         score = weight * 2.0 - rank                      # bm25: lower is better
+        alt_low = (alt or "").lower()
+        alt_words = [a.strip() for a in re.split(r"[\s,;]+", alt_low) if a.strip()]
+
         if len(words) > 1:
             share = _covered(words, name, alt)
             if share < 0.5:
                 continue                                # matched only a small word
             score -= 14 * (1 - share)                   # every word beats most words
-        if kind in want:
-            score += 10                                 # "bus stop" typed: bus stops first
-        elif "junction" in want and re.search(r"\b(?:junction|jn|jnc|jct)\b", low):
-            score += 10
+
+        matched_name = False
         if low == typed:
-            score += 20
+            score += 25
+            matched_name = True
         elif low.startswith(typed):
-            score += 14
+            score += 16
+            matched_name = True
         elif typed in low:
-            score += 6
-        elif styped:
+            score += 8
+            matched_name = True
+        elif alt_low:
+            if any(a == typed for a in alt_words) or alt_low == typed:
+                score += 25
+                matched_name = True
+            elif any(a.startswith(typed) for a in alt_words) or alt_low.startswith(typed):
+                score += 16
+                matched_name = True
+            elif typed in alt_low:
+                score += 8
+                matched_name = True
+
+        if not matched_name and styped:
             sname = _sound_key(name)
-            if sname == styped:
-                score += 16                              # same name, other spelling
-            elif sname.startswith(styped):
+            salt = _sound_key(alt) if alt else ""
+            if sname == styped or (salt and salt == styped):
+                score += 16
+            elif sname.startswith(styped) or (salt and salt.startswith(styped)):
                 score += 11
-            elif styped in sname:
+            elif styped in sname or (salt and styped in salt):
                 score += 4
+
+        if kind in want:
+            score += 28                                 # strongly lift places of the requested sort (station, stop, etc.)
+        elif "junction" in want and re.search(r"\b(?:junction|jn|jnc|jct)\b", low):
+            score += 20
+        elif want and kind in ("Street", "Water", "Area"):
+            score -= 15                                 # penalize ordinary streets when station or bus stop was requested
+
         if exact:
             score += 3
         if near:
-            # Nearby wins: the Lulu Mall in your city before the one 170 km away.
             km = haversine(near[0], near[1], lat, lon) / 1000.0
-            score -= 9.0 * math.log1p(km / 3.0)
+            scale = 4.0 if (matched_name or kind in want) else 9.0
+            score -= scale * math.log1p(km / 3.0)
         scored.append((score, name, kind, lat, lon, place_near))
     scored.sort(key=lambda s: -s[0])
     out, shown = [], set()

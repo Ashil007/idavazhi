@@ -49,7 +49,10 @@ class StopError(TimingError):
 
 def _connect():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    db = sqlite3.connect(DB_PATH, timeout=10)
+    db = sqlite3.connect(DB_PATH, timeout=15)
+    db.execute("PRAGMA journal_mode = WAL;")
+    db.execute("PRAGMA busy_timeout = 5000;")
+    db.execute("PRAGMA synchronous = NORMAL;")
     db.row_factory = sqlite3.Row
     db.executescript("""
         -- Map stops riders have named: the map's own name, for the tally.

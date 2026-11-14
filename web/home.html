@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Vazhi — never miss your stop</title>
 <meta name="description" content="Vazhi plans your trip by bus, train or metro across Kerala and rings an alarm before your stop. Free, no sign-up. Install it or use it in your browser." />
-<meta name="theme-color" content="#fbf8f3" />
+<meta name="theme-color" content="#f6b73c" data-dark="#1b1812" />
 <meta property="og:title" content="Vazhi — never miss your stop" />
 <meta property="og:description" content="Bus, train and metro across Kerala, door to door, with an alarm before your stop." />
 <meta property="og:type" content="website" />
@@ -14,10 +14,11 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
 <link rel="stylesheet" href="home.css" />
+<script src="theme.js"></script>
 </head>
-<body>
+<body class="home">
 
 <a class="skip" href="#main">Skip to content</a>
 
@@ -34,7 +35,11 @@
       <a href="#get">Download</a>
       <a href="#faq">Questions</a>
     </nav>
-    <a class="btn btn--small btn--main" href="/app">Open Vazhi</a>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+      <svg class="theme-toggle__moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+      <svg class="theme-toggle__sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+    </button>
+    <a class="btn btn--small btn--ink" href="/app">Open Vazhi</a>
     <button type="button" class="nav__menu" id="nav-menu" aria-label="Menu" aria-expanded="false" aria-controls="nav-drop">
       <span></span><span></span><span></span>
     </button>
@@ -57,14 +62,15 @@
 
 <!-- ============================================================ hero -->
 <section class="hero" id="top">
+  <div class="rings hero__rings" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="wrap hero__in">
     <div class="hero__text">
-      <p class="modes-line"><span><i class="dot dot--bus"></i>Bus</span><span><i class="dot dot--train"></i>Train</span><span><i class="dot dot--metro"></i>Kochi Metro</span><span class="modes-line__where">across Kerala</span></p>
-      <h1><span class="hero__soft">Relax on the bus.</span> Vazhi wakes you before your stop.</h1>
+      <p class="modes-pill"><span><i class="dot dot--bus"></i>Bus</span><span><i class="dot dot--train"></i>Train</span><span><i class="dot dot--metro"></i>Kochi Metro</span><span class="modes-pill__where">All of Kerala</span></p>
+      <h1>Never miss your&nbsp;stop.</h1>
       <p class="lead">Tell Vazhi where you are going. It finds the bus, train or metro, shows you where to get on, and rings an alarm before your stop &mdash; even with the screen locked.</p>
       <div class="cta">
-        <a class="btn btn--main btn--big" href="/app">Use Vazhi now <span aria-hidden="true">&rarr;</span></a>
-        <button type="button" class="btn btn--quiet btn--big js-install">
+        <a class="btn btn--ink btn--big" href="/app">Use Vazhi now <span aria-hidden="true">&rarr;</span></a>
+        <button type="button" class="btn btn--onbrand btn--big js-install">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 0 1 1.4-1.4l3.3 3.3V4a1 1 0 0 1 1-1ZM5 19h14a1 1 0 1 1 0 2H5a1 1 0 1 1 0-2Z"/></svg>
           <span class="js-install-label">Download the app</span>
         </button>
@@ -75,8 +81,22 @@
     </div>
 
     <div class="hero__art" aria-hidden="true">
-      <div class="phone phone--back"><img src="site/phone-route.webp" alt="" width="585" height="1266" /></div>
-      <div class="phone phone--front"><img src="site/phone-alarm.webp" alt="" width="585" height="1266" /></div>
+      <div class="phone hero__phone"><img src="site/phone-route.webp" alt="" width="585" height="1266" /></div>
+      <div class="note">
+        <img src="icons/icon-192.png" alt="" width="40" height="40" />
+        <div>
+          <p class="note__meta"><span>Vazhi</span><span>now</span></p>
+          <p class="note__title">Wake up &mdash; your stop is coming</p>
+          <p class="note__body">Vyttila is 1.9 km away, about 8 min. Get ready to get off.</p>
+        </div>
+      </div>
+      <div class="tripchip">
+        <span class="tripchip__bell"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg></span>
+        <div>
+          <p class="tripchip__title">Edappally &rarr; Vyttila</p>
+          <p class="tripchip__body"><i class="dot dot--bus"></i>Bus &middot; 29 min &middot; alarm 2 km before</p>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -92,8 +112,8 @@
 </section>
 
 <!-- ============================================================ how it works (the demo) -->
-<section class="section section--night demo" id="how" aria-labelledby="demo-h">
-  <div class="wrap demo__in">
+<section class="band" id="how" aria-labelledby="demo-h">
+  <div class="panel panel--forest demo">
     <div class="demo__shot">
       <div class="phone demo__phone">
         <video class="demo__video" id="demo-video" muted loop playsinline preload="metadata"
@@ -109,12 +129,13 @@
       </button>
     </div>
     <div class="demo__text">
-      <h2 id="demo-h">A whole trip, from &ldquo;where to?&rdquo; to &ldquo;wake up&rdquo;</h2>
-      <ol class="demo__steps">
-        <li><b>Type where you&rsquo;re going.</b> Vazhi searches 3,76,712 places in Kerala, odd spellings and all.</li>
-        <li><b>Plan the trip.</b> It finds your bus, the walk to the stop, and marks every stop on the map.</li>
-        <li><b>Ride.</b> Vazhi follows the bus with your phone&rsquo;s location and counts down to your stop.</li>
-        <li><b>Wake up.</b> The alarm rings 2&nbsp;km before your stop, and again when you are there.</li>
+      <p class="eyebrow">How it works</p>
+      <h2 id="demo-h">One trip, from &ldquo;where&nbsp;to?&rdquo; to &ldquo;wake&nbsp;up&rdquo;</h2>
+      <ol class="line">
+        <li class="step"><b>Type where you&rsquo;re going</b><span>Vazhi searches 3,76,712 places in Kerala, odd spellings and all.</span></li>
+        <li class="step"><b>Plan the trip</b><span>It finds your bus, the walk to the stop, and marks every stop on the map.</span></li>
+        <li class="step"><b>Ride</b><span>Vazhi follows the bus with your phone&rsquo;s location and counts down to your stop.</span></li>
+        <li class="step step--end"><b>Wake up</b><span>The alarm rings 2&nbsp;km before your stop, and again when you are there.</span></li>
       </ol>
       <p class="demo__note">A real recording of Vazhi&rsquo;s demo ride. The 27-minute bus ride is sped up to 10 seconds.</p>
     </div>
@@ -123,62 +144,75 @@
 
 <!-- ============================================================ why -->
 <section class="section" id="why">
-  <div class="wrap why">
+  <div class="wrap">
     <header class="why__head">
       <h2>Travelling by bus in Kerala shouldn&rsquo;t need a local guide</h2>
       <p class="section__lead">Every day lakhs of people take a bus, a train or the metro to college, to work and to hospital. Most of them have said one of these.</p>
     </header>
     <ol class="pains">
       <li class="pain">
-        <span class="pain__n" aria-hidden="true">01</span>
-        <div>
-          <p class="pain__q">&ldquo;I dozed off and missed my stop.&rdquo;</p>
-          <p class="pain__a"><b>Vazhi rings before your stop.</b> It follows the bus with your phone&rsquo;s location and wakes you in time &mdash; even with the screen locked.</p>
-        </div>
+        <p class="pain__q"><span class="pain__n" aria-hidden="true">01</span>&ldquo;I dozed off and missed my stop.&rdquo;</p>
+        <p class="pain__a"><b>Vazhi rings before your stop.</b> It follows the bus with your phone&rsquo;s location and wakes you in time &mdash; even with the screen locked.</p>
       </li>
       <li class="pain">
-        <span class="pain__n" aria-hidden="true">02</span>
-        <div>
-          <p class="pain__q">&ldquo;Which bus? Where do I even get on?&rdquo;</p>
-          <p class="pain__a"><b>Vazhi shows you the whole way.</b> The nearest stop, the walk to it, the bus or train to take and every stop on the way, on a map you can follow.</p>
-        </div>
+        <p class="pain__q"><span class="pain__n" aria-hidden="true">02</span>&ldquo;Which bus? Where do I even get on?&rdquo;</p>
+        <p class="pain__a"><b>Vazhi shows you the whole way.</b> The nearest stop, the walk to it, the bus or train to take and every stop on the way, on a map you can follow.</p>
       </li>
       <li class="pain">
-        <span class="pain__n" aria-hidden="true">03</span>
-        <div>
-          <p class="pain__q">&ldquo;The nearest bus stop is too far to walk.&rdquo;</p>
-          <p class="pain__a"><b>Vazhi plans the scooter ride too.</b> Ride your two-wheeler to the station or bus stand, park it, and take the train or bus. Vazhi plans every part &mdash; and the walk at the other end.</p>
-        </div>
+        <p class="pain__q"><span class="pain__n" aria-hidden="true">03</span>&ldquo;The nearest bus stop is too far to walk.&rdquo;</p>
+        <p class="pain__a"><b>Vazhi plans the scooter ride too.</b> Ride your two-wheeler to the station or bus stand, park it, and take the train or bus. Vazhi plans every part &mdash; and the walk at the other end.</p>
       </li>
     </ol>
   </div>
 </section>
 
 <!-- ============================================================ features -->
-<section class="section section--sand" id="features">
+<section class="section section--tiles" id="features">
   <div class="wrap">
     <header class="sec-head">
       <h2>Everything for the trip, in plain words</h2>
       <p class="section__lead">Large type, real buttons, no small print. Built for the ride, not for the screenshot.</p>
     </header>
+  </div>
 
-    <article class="row feature">
-      <div class="row__text">
-        <p class="row__tag"><i class="dot dot--alarm"></i>The alarm</p>
+  <div class="bento">
+    <article class="tile tile--wide tile--sand feature">
+      <div class="tile__text">
+        <p class="eyebrow">The alarm</p>
         <h3>Rings before your stop, not after it</h3>
-        <p>Pick when it should ring: <b>500 m, 1, 3, 5 or 10 km</b> before your stop, or leave it on <b>Default</b> (2 km). A loud alarm, or <b>vibrate only</b> if you don&rsquo;t want to disturb anyone. A second, gentle alert tells you when you have arrived.</p>
+        <p>A loud alarm, or <b>vibrate only</b> if you don&rsquo;t want to disturb anyone. A second, gentle alert tells you when you have arrived. You pick how early it rings:</p>
+
+        <div class="ring" id="ring">
+          <div class="ring__chips" role="radiogroup" aria-label="Ring the alarm this far before your stop">
+            <button type="button" role="radio" aria-checked="true" data-km="2" data-say="2 km" data-min="8">Default</button>
+            <button type="button" role="radio" aria-checked="false" data-km="0.5" data-say="500 m" data-min="2" tabindex="-1">500 m</button>
+            <button type="button" role="radio" aria-checked="false" data-km="1" data-say="1 km" data-min="4" tabindex="-1">1 km</button>
+            <button type="button" role="radio" aria-checked="false" data-km="3" data-say="3 km" data-min="12" tabindex="-1">3 km</button>
+            <button type="button" role="radio" aria-checked="false" data-km="5" data-say="5 km" data-min="20" tabindex="-1">5 km</button>
+            <button type="button" role="radio" aria-checked="false" data-km="10" data-say="10 km" data-min="40" tabindex="-1">10 km</button>
+          </div>
+          <div class="ring__track" aria-hidden="true">
+            <span class="ring__zone" id="ring-zone"></span>
+            <span class="ring__bus" id="ring-bus"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg></span>
+            <span class="ring__start"></span>
+            <span class="ring__stop"></span>
+          </div>
+          <p class="ring__ends" aria-hidden="true"><span>You get on</span><span>Your stop</span></p>
+          <p class="ring__say" aria-live="polite">Rings <b id="ring-km">2 km</b> before your stop &mdash; roughly <b id="ring-min">8 minutes</b> early on a city bus.</p>
+        </div>
+
         <ul class="ticks">
           <li>Rings even when the screen is off or another app is open</li>
           <li>One big &ldquo;I&rsquo;m awake&rdquo; button &mdash; nothing to fumble</li>
           <li>Try it first with the built-in demo trip</li>
         </ul>
       </div>
-      <div class="row__shot"><div class="phone"><img src="site/phone-alarm-set.webp" alt="Vazhi's alarm settings: Ring the alarm, 2 km by default, with buttons for 500 m to 10 km and a Vibrate only switch" width="585" height="1266" loading="lazy" /></div></div>
+      <div class="tile__shot"><div class="phone"><img src="site/phone-alarm-set.webp" alt="Vazhi's alarm settings: Ring the alarm, 2 km by default, with buttons for 500 m to 10 km and a Vibrate only switch" width="585" height="1266" loading="lazy" /></div></div>
     </article>
 
-    <article class="row row--flip feature">
-      <div class="row__text">
-        <p class="row__tag"><i class="dot dot--bus"></i>Door to door</p>
+    <article class="tile tile--forest feature">
+      <div class="tile__text">
+        <p class="eyebrow">Door to door</p>
         <h3>Bus, train or metro &mdash; and the walk to the stop</h3>
         <p>Bus routes across Kerala, Indian Railways trains and Kochi Metro. Vazhi also plans the walk to the stop, or the scooter ride to the station, so the time it shows is the real time.</p>
         <ul class="modes" aria-label="Ways to travel">
@@ -188,55 +222,57 @@
           <li><i class="dot dot--walk"></i>Walk or two-wheeler</li>
         </ul>
       </div>
-      <div class="row__shot"><div class="phone"><img src="site/phone-route.webp" alt="A bus trip in Vazhi: the bus line from Edappally to Vyttila drawn on the map of Kochi, with every stop and a second route marked" width="585" height="1266" loading="lazy" /></div></div>
+      <div class="tile__shot"><div class="phone"><img src="site/phone-route.webp" alt="A bus trip in Vazhi: the bus line from Edappally to Vyttila drawn on the map of Kochi, with every stop and a second route marked" width="585" height="1266" loading="lazy" /></div></div>
     </article>
 
-    <article class="row feature">
-      <div class="row__text">
-        <p class="row__tag"><i class="dot dot--train"></i>Step by step</p>
+    <article class="tile tile--amber feature">
+      <div class="tile__text">
+        <p class="eyebrow">Step by step</p>
         <h3>Every step spelled out, every stop named</h3>
-        <p>Where to walk, which stop to get on at, how many stops you pass and where to change. Riders add the bus times they know, so Vazhi can tell you <b>when to leave</b> to catch the next bus.</p>
+        <p>Where to walk, which stop to get on at, how many stops you pass and where to change. Riders add the bus times they know, so Vazhi can tell you <b>when to leave</b>.</p>
         <ul class="ticks">
           <li>Bus times from riders, with &ldquo;Leave by 8:40 am&rdquo;</li>
           <li>An Uber to the stop when it is too far to walk</li>
           <li>Share the whole trip on WhatsApp in one tap</li>
         </ul>
       </div>
-      <div class="row__shot"><div class="phone"><img src="site/phone-steps.webp" alt="A planned trip in Vazhi: walk 370 m to Edappally Junction, bus 6.7 km to Vyttila Devaswom Board with 13 stops, walk 160 m" width="585" height="1266" loading="lazy" /></div></div>
+      <div class="tile__shot"><div class="phone"><img src="site/phone-steps.webp" alt="A planned trip in Vazhi: walk 370 m to Edappally Junction, bus 6.7 km to Vyttila Devaswom Board with 13 stops, walk 160 m" width="585" height="1266" loading="lazy" /></div></div>
     </article>
+  </div>
 
+  <div class="wrap">
     <div class="extras">
       <h3 class="extras__title">And the small things that matter</h3>
       <ul class="extras__list">
         <li class="feature">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-          <div><h4>Finds any place, any spelling</h4>
-          <p>3,76,712 named places in Kerala &mdash; bus stops, junctions, temples, churches, schools, offices and shops.</p></div>
+          <h4>Finds any place, any spelling</h4>
+          <p>3,76,712 named places in Kerala &mdash; bus stops, junctions, temples, churches, schools, offices and shops.</p>
         </li>
         <li class="feature">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
-          <div><h4>Honest warnings</h4>
-          <p>&ldquo;The nearest bus stop is 10 km away.&rdquo; Vazhi says so plainly, and suggests what to do instead.</p></div>
+          <h4>Honest warnings</h4>
+          <p>&ldquo;The nearest bus stop is 10 km away.&rdquo; Vazhi says so plainly, and suggests what to do instead.</p>
         </li>
         <li class="feature">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.4c1.8.8 3 2.9 3 5.6"/></svg>
-          <div><h4>Made better by riders</h4>
-          <p>Know when the bus leaves your stop? Add the time. Is a stop name wrong? Fix it for the next rider.</p></div>
+          <h4>Made better by riders</h4>
+          <p>Know when the bus leaves your stop? Add the time. Is a stop name wrong? Fix it for the next rider.</p>
         </li>
         <li class="feature">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M9 20l-2 2M15 20l2 2"/></svg>
-          <div><h4>Where is my train?</h4>
-          <p>Riders on board can share where their train is, without saying who they are, so you can see it before it reaches you.</p></div>
+          <h4>Where is my train?</h4>
+          <p>Riders on board can share where their train is, without saying who they are, so you can see it before it reaches you.</p>
         </li>
         <li class="feature">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>
-          <div><h4>Installs like an app</h4>
-          <p>Less than 1 MB, no app store needed. Opens from your home screen, even without internet.</p></div>
+          <h4>Installs like an app</h4>
+          <p>Less than 1 MB, no app store needed. Opens from your home screen, even without internet.</p>
         </li>
         <li class="feature">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
-          <div><h4>No account, no ads</h4>
-          <p>Open it and go. Your location is used only to plan your trip and ring your alarm.</p></div>
+          <h4>No account, no ads</h4>
+          <p>Open it and go. Your location is used only to plan your trip and ring your alarm.</p>
         </li>
       </ul>
     </div>
@@ -244,9 +280,10 @@
 </section>
 
 <!-- ============================================================ big screen -->
-<section class="section">
+<section class="section section--bigscreen">
   <div class="wrap bigscreen">
     <div class="bigscreen__text">
+      <p class="eyebrow">On a computer</p>
       <h2>Plan tomorrow&rsquo;s trip on the big screen</h2>
       <p class="section__lead">Open Vazhi on a laptop to look at the whole route, then share it to your phone.</p>
       <a class="link-arrow" href="/app">Open the web version <span aria-hidden="true">&rarr;</span></a>
@@ -262,6 +299,7 @@
 <section class="section section--sand guide" id="guide">
   <div class="wrap">
     <header class="sec-head">
+      <p class="eyebrow">The full guide</p>
       <h2>Every feature, explained</h2>
       <p class="section__lead">Everything Vazhi can do, in the order you meet it &mdash; from opening the app to stepping off at your stop. Pick a topic to jump to it.</p>
     </header>
@@ -532,7 +570,10 @@
 <!-- ============================================================ faq -->
 <section class="section section--sand" id="faq">
   <div class="wrap faq-wrap">
-    <h2>Good to know</h2>
+    <header class="faq__head">
+      <h2>Good to know</h2>
+      <p class="section__lead">Something else on your mind? <a href="/contact">Write to the maker</a>.</p>
+    </header>
     <div class="faq">
       <details>
         <summary>Is Vazhi free?</summary>
@@ -571,15 +612,14 @@
 </section>
 
 <!-- ============================================================ closing -->
-<section class="closing">
-  <div class="wrap closing__in">
-    <div>
-      <h2>Your next trip, without the worry.</h2>
-      <p>Free, no sign-up. Install it, or open it in your browser.</p>
-    </div>
+<section class="band band--last">
+  <div class="panel panel--amber closing">
+    <div class="rings closing__rings" aria-hidden="true"><i></i><i></i><i></i></div>
+    <h2>Your next trip, without the worry.</h2>
+    <p>Free, no sign-up. Install it, or open it in your browser.</p>
     <div class="cta">
-      <a class="btn btn--main btn--big" href="/app">Use Vazhi now <span aria-hidden="true">&rarr;</span></a>
-      <button type="button" class="btn btn--onnight btn--big js-install"><span class="js-install-label">Download the app</span></button>
+      <a class="btn btn--ink btn--big" href="/app">Use Vazhi now <span aria-hidden="true">&rarr;</span></a>
+      <button type="button" class="btn btn--onbrand btn--big js-install"><span class="js-install-label">Download the app</span></button>
     </div>
   </div>
 </section>

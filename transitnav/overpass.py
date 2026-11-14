@@ -793,6 +793,8 @@ def parse_stops(data: dict):
                 "lat": lat,
                 "lon": lon,
                 "name": clean_name(tags),
+                # The Malayalam name, for the alarm's Malayalam voice (voice.py).
+                "name_ml": tags.get("name:ml"),
                 # A bus stand or station is where long-distance buses call.
                 "kind": "station" if (tags.get("amenity") == "bus_station"
                                       or tags.get("public_transport") == "station"

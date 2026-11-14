@@ -47,12 +47,14 @@ BASEMAP.init(map);
 
 var routeLayer = L.layerGroup().addTo(map);
 var pointLayer = L.layerGroup().addTo(map);
-var whereLayer = L.layerGroup().addTo(map);   // "you are here" or the district outline
+window.userLocationLayer = window.userLocationLayer || L.layerGroup().addTo(map);
+var whereLayer = window.userLocationLayer;   // "you are here" or the district outline
 
-function pinIcon(color) {
+function pinIcon(color, role) {
+  var inner = role === "origin" ? '<span style="display:block;width:6px;height:6px;background:#fff;border-radius:50%;margin:3px auto;"></span>' : '';
   return L.divIcon({
     className: "",
-    html: '<div class="pin" style="width:16px;height:16px;background:' + color + '"></div>',
+    html: '<div class="pin" style="width:16px;height:16px;background:' + color + '">' + inner + '</div>',
     iconSize: [16, 16],
     iconAnchor: [8, 8]
   });
@@ -105,7 +107,7 @@ function drawPoints() {
   [["origin", "#4da3ff"], ["destination", "#f2686b"]].forEach(function (pair) {
     var role = pair[0], p = state[role];
     if (!p) return;
-    var m = L.marker([p.lat, p.lon], { icon: pinIcon(pair[1]), draggable: true, zIndexOffset: 1000 })
+    var m = L.marker([p.lat, p.lon], { icon: pinIcon(pair[1], role), draggable: true, zIndexOffset: 1000 })
       .addTo(pointLayer)
       .bindTooltip(role === "origin" ? "Start" : "Destination", { direction: "top", offset: [0, -8] });
     m.on("dragend", function (e) { setPoint(role, e.target.getLatLng()); });
@@ -789,7 +791,8 @@ function renderPlan(plan, fit) {
 
   // Every train or vehicle leg: a long train trip may have two, with a
   // change between them.
-  plan.legs.filter(function (l) { return l.type === "transit"; }).forEach(function (transit) {
+  var transitLegs = plan.legs.filter(function (l) { return l.type === "transit"; });
+  transitLegs.forEach(function (transit, idx) {
     var changes = transit.changes || [];
     (transit.stops_passed || []).forEach(function (s) {
       var isChange = changes.indexOf(s.name) !== -1;
@@ -802,12 +805,19 @@ function renderPlan(plan, fit) {
                               : escapeHtml(s.name || "unnamed stop"),
                      { direction: "top", offset: [0, -6] });
     });
-    [[transit.from, "Board here"], [transit.to, "Get off here"]].forEach(function (pair) {
-      L.marker([pair[0].lat, pair[0].lon], { icon: stopIcon(color, 15), zIndexOffset: 500 })
-        .addTo(routeLayer)
-        .bindTooltip("<b>" + escapeHtml(pair[0].name || "Unnamed stop") + "</b><br>" + pair[1],
-                     { direction: "top", offset: [0, -9] });
-    });
+    // Boarding stop in mode color (orange for train):
+    L.marker([transit.from.lat, transit.from.lon], { icon: stopIcon(color, 15), zIndexOffset: 500 })
+      .addTo(routeLayer)
+      .bindTooltip("<b>" + escapeHtml(transit.from.name || "Unnamed stop") + "</b><br>Board here",
+                   { direction: "top", offset: [0, -9] });
+
+    // Final destination stop in distinct red (#f2686b):
+    var isLastTransit = idx === transitLegs.length - 1;
+    var destColor = isLastTransit ? "#f2686b" : color;
+    L.marker([transit.to.lat, transit.to.lon], { icon: stopIcon(destColor, 15), zIndexOffset: 500 })
+      .addTo(routeLayer)
+      .bindTooltip("<b>" + escapeHtml(transit.to.name || "Unnamed stop") + "</b><br>" + (isLastTransit ? "Destination (Get off here)" : "Change lines here"),
+                   { direction: "top", offset: [0, -9] });
   });
 
   // Fit the map to every option when the plan arrives; switching between
@@ -992,6 +1002,9 @@ function locateUser() {
   navigator.geolocation.getCurrentPosition(function (pos) {
     var here = L.latLng(pos.coords.latitude, pos.coords.longitude);
     var acc = Math.round(pos.coords.accuracy || 0);
+    if (typeof ALERTS !== "undefined" && ALERTS.isRunning()) {
+      return;
+    }
     whereLayer.clearLayers();
     if (acc > 0) {
       L.circle(here, { radius: acc, color: "#4da3ff", weight: 1, fillOpacity: 0.08, interactive: false })
