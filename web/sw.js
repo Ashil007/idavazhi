@@ -12,7 +12,7 @@
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v67";
+var CACHE = "vazhi-shell-v70";
 var OFFLINE = "vazhi-offline-trips";     // saved trips' routes and map tiles (trips.js)
 var SHELL = [
   "/", "/app", "home.css", "home.js", "theme.js", "style.css", "manifest.webmanifest",

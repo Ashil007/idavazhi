@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import (basemap, crowd, feedback, limits, locate, overpass, places, preload, router,
                settings, contact, livetrains, stopnames, tickets, timings, userplaces, voice)
 from .config import ACCESS_MODES, MODES
-from .planner import PlanError, plan, prefetch
+from .planner import PREFERENCES, PlanError, plan, prefetch
 
 GZIP_MIN = 64 * 1024
 # Largest JSON body accepted (riders' reports, the scripted /api/plan).
@@ -151,7 +151,8 @@ def _log_plan(mode, access, outcome, started):
 
 
 def _check_modes(mode, access):
-    if mode not in MODES:
+    # A vehicle, or Fastest / Cheapest, which compares them all.
+    if mode not in MODES and mode not in PREFERENCES:
         raise PlanError("Unknown travel mode.")
     if access not in ACCESS_MODES:
         raise PlanError("Unknown way of reaching the stop.")
@@ -531,6 +532,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 point = _coord(params, "lat", "lon")
                 mode = (params.get("mode") or ["bus"])[0]
+                if mode in PREFERENCES:
+                    mode = "bus"          # Fastest / Cheapest always try the bus
                 if mode not in MODES:
                     raise PlanError("Unknown mode.")
                 # A nicety: when enough already run, this one is skipped.

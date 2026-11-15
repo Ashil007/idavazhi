@@ -6,6 +6,12 @@ var MODES = {
   train: { label: "Train", color: "#e8833a" },
   metro: { label: "Metro", color: "#8b5cf6" }
 };
+// Or let Vazhi compare them all, and mixes of them (a train, then a bus):
+// the quickest trip, or the one with the lowest fare.
+var PREFER = {
+  fastest:  { label: "Fastest",  color: "#f6b73c" },
+  cheapest: { label: "Cheapest", color: "#f6b73c" }
+};
 
 // How the rider reaches and leaves the stops. Colours and dashes keep the two
 // access styles distinct from each other and from every vehicle line.
@@ -21,11 +27,13 @@ var ICONS = {
   two_wheeler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="16.5" r="3"/><circle cx="18.5" cy="16.5" r="3"/><path d="M5.5 16.5h6.5l3-6.5h-4.5M15 10l1.2-3H19M16.2 7l2.3 9.5"/></svg>',
   bus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="3" width="16" height="13" rx="2"/><path d="M4 9h16M8 20v-2M16 20v-2"/><circle cx="8" cy="13" r="1.1" fill="currentColor" stroke="none"/><circle cx="16" cy="13" r="1.1" fill="currentColor" stroke="none"/></svg>',
   train: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M8 20l2-3M16 20l-2-3"/><circle cx="9" cy="13" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1.1" fill="currentColor" stroke="none"/></svg>',
-  metro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 17V7a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v10"/><path d="M6 11h12M7 21l2-3M17 21l-2-3"/><circle cx="9.5" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="14" r="1.1" fill="currentColor" stroke="none"/></svg>'
+  metro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 17V7a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v10"/><path d="M6 11h12M7 21l2-3M17 21l-2-3"/><circle cx="9.5" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="14" r="1.1" fill="currentColor" stroke="none"/></svg>',
+  fastest: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></svg>',
+  cheapest: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5h10M7 9h10M10 5c3.5 0 5 1.6 5 4s-1.5 4-5 4H8l7 6"/></svg>'
 };
 
 var state = {
-  mode: "bus",         // the usual way to travel; the rider can change it
+  mode: "fastest",     // Fastest, Cheapest, or one of MODES; the rider can change it
   access: "walk",
   origin: null,
   destination: null,
@@ -179,6 +187,7 @@ function buildStopsSwitch() {
 function buildModes() {
   buildStopsSwitch();
   // Both choices sit at the top right of the map.
+  buildToggle("mapprefer", PREFER, "mode");
   buildToggle("mapmodes", MODES, "mode");
   // Walk or two-wheeler before planning; an Uber is offered on the planned
   // trip itself, once the rider can see how far the stop is.
@@ -400,8 +409,10 @@ function openSharedTrip() {
   var a = point(q.get("from")), b = point(q.get("to"));
   if (!a || !b) return false;
   ["mode", "access"].forEach(function (key) {
-    var btn = document.querySelector("#" + (key === "mode" ? "mapmodes" : "mapaccess") +
-                                      ' [data-id="' + (q.get(key) || "") + '"]');
+    var btn = document.querySelector((key === "mode" ? "#mapprefer, #mapmodes" : "#mapaccess")
+                                      .split(", ").map(function (w) {
+                                        return w + ' [data-id="' + (q.get(key) || "") + '"]';
+                                      }).join(", "));
     if (btn) btn.click();
   });
   setPoint("origin", a.at, a.name);
@@ -556,7 +567,7 @@ function toAction(a) {
   return {
     label: a.label,
     run: function () {
-      if (a.mode) { var m = document.querySelector('#mapmodes [data-id="' + a.mode + '"]'); if (m) m.click(); }
+      if (a.mode) { var m = document.querySelector('#mapprefer [data-id="' + a.mode + '"], #mapmodes [data-id="' + a.mode + '"]'); if (m) m.click(); }
       // An Uber is for this trip only: the plan shows the cab ride to the
       // stop with its "Book a ride" button. Walk / Two-wheeler stays as it was.
       if (a.access === "cab") { planJourney("cab"); return; }
@@ -660,12 +671,19 @@ function renderOptions(plan) {
   var box = el("options");
   var opts = state.options || [];
   if (opts.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
+  var compared = opts.some(function (o) { return o.badges; });
   box.innerHTML = opts.map(function (o, j) {
+    var badges = o.badges || (j === 0 ? ["Fastest"] : []);
+    var fare = o.summary.fare && o.summary.fare.text;
     return '<button type="button" class="option' + (o === plan ? " is-selected" : "") +
       '" data-option="' + j + '"><span class="option__label">' +
-      escapeHtml(o.option_label || "Option " + (j + 1)) + '</span><span class="option__time">' +
+      escapeHtml(o.option_label || "Option " + (j + 1)) +
+      badges.map(function (b) { return ' <span class="option__badge">' + escapeHtml(b) + "</span>"; }).join("") +
+      '</span><span class="option__time">' +
       escapeHtml(o.summary.duration_text) + '</span><span class="option__dist">' +
-      escapeHtml(o.summary.distance_text) + (j === 0 ? " &middot; fastest" : "") + "</span></button>";
+      (compared && o.option_detail ? escapeHtml(o.option_detail) + " &middot; " : "") +
+      escapeHtml(o.summary.distance_text) + (fare ? " &middot; " + escapeHtml(fare) : "") +
+      "</span></button>";
   }).join("");
   box.hidden = false;
   Array.prototype.forEach.call(box.querySelectorAll("[data-option]"), function (b) {
@@ -737,6 +755,27 @@ function uberButton(plan, leg) {
   return wrap;
 }
 
+// A trip may mix modes (a train, then a bus): each ride in its own colour.
+function legColor(plan, leg) {
+  return (leg && leg.mode && MODES[leg.mode]) ? MODES[leg.mode].color : plan.color;
+}
+
+// A bus leg: the fare for each KSRTC bus type, since the rider does not know
+// which one comes. Ordinary fares go by 2.5 km stages, so they show a range.
+function fareByType(fare) {
+  var det = document.createElement("details");
+  det.className = "leg__stops";
+  var rows = fare.types.map(function (t) {
+    var low = t.low == null ? t.rupees : t.low, high = t.high == null ? t.rupees : t.high;
+    return "<li>" + escapeHtml(t.name) + " &mdash; ₹" + low + (high !== low ? "–" + high : "") + "</li>";
+  }).join("");
+  var notes = (fare.notes || []).map(function (n) {
+    return "<li>" + escapeHtml(n) + "</li>";
+  }).join("");
+  det.innerHTML = '<summary>Fare by bus type</summary><ul>' + rows + notes + "</ul>";
+  return det;
+}
+
 function renderPlan(plan, fit) {
   var color = plan.color;
   var access = ACCESS[plan.access] || ACCESS.walk;
@@ -780,7 +819,7 @@ function renderPlan(plan, fit) {
     // Each leg in its own style: with a two-wheeler the last stretch is a walk.
     var own = ACCESS[leg.access] || access;
     L.polyline(leg.geometry, {
-      color: isAccess ? own.color : color,
+      color: isAccess ? own.color : legColor(plan, leg),
       weight: isAccess ? 4 : 6,
       opacity: isAccess ? 0.95 : 0.9,
       dashArray: isAccess ? own.dash : null,
@@ -793,6 +832,7 @@ function renderPlan(plan, fit) {
   // change between them.
   var transitLegs = plan.legs.filter(function (l) { return l.type === "transit"; });
   transitLegs.forEach(function (transit, idx) {
+    var color = legColor(plan, transit);
     var changes = transit.changes || [];
     (transit.stops_passed || []).forEach(function (s) {
       var isChange = changes.indexOf(s.name) !== -1;
@@ -844,7 +884,11 @@ function renderPlan(plan, fit) {
   el("summary").innerHTML =
     '<div><b>' + s.duration_text + '</b><span>Total time</span></div>' +
     '<div><b>' + s.distance_text + '</b><span>Total distance</span></div>' +
-    '<div><b>' + fmtKm(s.access_m) + '</b><span>' + access.noun + '</span></div>';
+    '<div><b>' + fmtKm(s.access_m) + '</b><span>' + access.noun + '</span></div>' +
+    (s.fare ? '<div><b>' + escapeHtml(s.fare.complete || s.fare.min ? s.fare.text.split(" + ")[0]
+                                                                      : "Not priced") +
+              '</b><span>' + (s.fare.complete ? "Fare, about" : s.fare.min ? "Fare, plus the " +
+                              escapeHtml(s.fare.missing.join(" and ")) : "Fare") + '</span></div>' : "");
 
   /* ---- itinerary ---- */
   var list = el("itinerary");
@@ -852,7 +896,7 @@ function renderPlan(plan, fit) {
   plan.legs.forEach(function (leg) {
     var li = document.createElement("li");
     li.className = "leg leg--" + leg.type;
-    li.style.setProperty("--leg-color", leg.type === "transit" ? color :
+    li.style.setProperty("--leg-color", leg.type === "transit" ? legColor(plan, leg) :
                          leg.type === "wait" ? "#7d8a9c" : (ACCESS[leg.access] || access).color);
 
     var meta = leg.type === "wait" ? "Wait about " + fmtMin(leg.duration_s)
@@ -865,6 +909,12 @@ function renderPlan(plan, fit) {
       meta += " &middot; " + leg.changes.length + " change" + (leg.changes.length > 1 ? "s" : "");
     }
     if (leg.approximate) meta += " &middot; straight-line estimate";
+    if (leg.fare) {
+      meta += " &middot; about " + escapeHtml(leg.fare.text) + (leg.fare.note ? " " + escapeHtml(leg.fare.note) : "");
+    } else if (leg.fare === null) {
+      meta += leg.type === "transit" ? " &middot; ticket at the station or in the UTS app"
+                                     : " &middot; fare not known";
+    }
 
     var html = '<div class="leg__title">' + escapeHtml(leg.label) + "</div>" +
                (leg.detail ? '<div class="leg__detail">' + escapeHtml(leg.detail) + "</div>" : "") +
@@ -881,10 +931,11 @@ function renderPlan(plan, fit) {
               }).join("") + "</ul></details>";
     }
     li.innerHTML = html;
+    if (leg.fare && leg.fare.types) li.appendChild(fareByType(leg.fare));
     if (leg.access === "cab" || offersUber(plan, leg)) li.appendChild(uberButton(plan, leg));
     if (leg.type === "transit" && leg.train) LIVETRAIN.legButton(li, leg);   // where is it now?
     // Bus rides: the times riders have added for this stop and direction.
-    if (plan.mode === "bus" && leg.type === "transit" && leg.from && leg.to) {
+    if (leg.mode === "bus" && leg.type === "transit" && leg.from && leg.to) {
       var times = document.createElement("div");
       times.className = "times";
       li.appendChild(times);
@@ -914,7 +965,12 @@ function renderPlan(plan, fit) {
     '<div><i style="background:' + access.color + '"></i> ' + access.noun + '</div>' +
     (plan.access !== "walk" && plan.legs.some(function (l) { return l.access === "walk"; })
       ? '<div><i style="background:' + ACCESS.walk.color + '"></i> ' + ACCESS.walk.noun + '</div>' : "") +
-    '<div><i style="background:' + color + '"></i> ' + escapeHtml(plan.mode_label) + " line</div>" +
+    transitLegs.map(function (l) { return l.mode; })
+      .filter(function (m, i, all) { return all.indexOf(m) === i; })
+      .map(function (m) {
+        return '<div><i style="background:' + legColor(plan, { mode: m }) + '"></i> ' +
+               escapeHtml(MODES[m] ? MODES[m].label : plan.mode_label) + " line</div>";
+      }).join("") +
     ((state.options || []).length > 1
       ? '<div><i class="legend__alt" style="color:' + color + '"></i> Other route</div>' : "");
   legend.hidden = false;

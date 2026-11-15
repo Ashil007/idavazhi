@@ -20,8 +20,9 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from itertools import product
 
-from . import overpass, router, stopnames, timetable
+from . import fares, overpass, router, stopnames, timetable
 from .config import (
+    MODES,
     ACCESS_MARGIN_FACTOR,
     ACCESS_MODES,
     ACCESS_MARGIN_MAX_M,
@@ -1256,9 +1257,12 @@ def _bus_options(result, cfg, all_stops, board, alight, wait_s, report):
     return best
 
 
-def plan(origin, destination, mode, report=None, access="walk"):
-    """Plan a journey. `origin`/`destination` are (lat, lon); `access` is how
-    the rider reaches and leaves the stops ("walk" or "two_wheeler")."""
+def _plan_mode(origin, destination, mode, report=None, access="walk", alternatives=True,
+               fast_only=False):
+    """A journey by one mode (bus, train or metro). `alternatives`: also look
+    for other roads the bus could take. `fast_only`: a bus trip only when the
+    street router answers - no slow road-network download (for the short
+    bus rides inside a combined trip)."""
     try:
         cfg = mode_config(mode)
         acfg = access_config(access)
@@ -1316,6 +1320,8 @@ def plan(origin, destination, mode, report=None, access="walk"):
     if fast is not None:
         board, alight, transit_coords, transit_m, skipped, changes, road_s = fast
         areas = []   # the street router answered; no road network download
+    elif mode == "bus" and fast_only:
+        raise PlanError("The route service did not answer.", title="Route service not answering")
     elif mode == "bus" and direct > cfg.get("road_fallback_max_m", float("inf")):
         raise PlanError(
             "The route service did not answer, so a bus trip this long cannot be "
@@ -1505,6 +1511,233 @@ def plan(origin, destination, mode, report=None, access="walk"):
             "direct_m": direct,
         },
     }
-    if mode == "bus" and road_s is not None:
+    if mode == "bus" and road_s is not None and alternatives:
         result = _bus_options(result, cfg, all_stops, board, alight, wait_s, report)
     return result
+
+
+# Fastest or Cheapest: Vazhi tries every way it knows - each mode on its own,
+# and a train or metro trip with a real bus (not "bus or auto") for a far
+# end - then ranks them by time or by fare.
+PREFERENCES = {"fastest": "Fastest", "cheapest": "Cheapest"}
+# Below this a train rarely helps, and its search is slow.
+TRAIN_MIN_M = 25000
+# Kochi Metro runs only here (Aluva to Tripunithura, with room to reach a
+# station by bus or auto): (south, west, north, east).
+KOCHI_METRO_AREA = (9.88, 76.20, 10.18, 76.46)
+# Train or metro options given a bus for their far ends.
+COMBINE_OPTIONS = 2
+MAX_BEST_OPTIONS = 4
+PER_KIND = 2
+
+
+def plan(origin, destination, mode, report=None, access="walk"):
+    """Plan a journey. `origin`/`destination` are (lat, lon); `mode` is a
+    vehicle ("bus", "train", "metro") or a preference ("fastest",
+    "cheapest") that compares them all; `access` is how the rider reaches
+    and leaves the stops ("walk" or "two_wheeler"). Every leg and option
+    carries a fare estimate (fares.py)."""
+    if mode in PREFERENCES:
+        return _plan_best(origin, destination, mode, report or (lambda *a: None), access)
+    return fares.price(_plan_mode(origin, destination, mode, report, access))
+
+
+def _in_area(point, area):
+    return area[0] <= point[0] <= area[2] and area[1] <= point[1] <= area[3]
+
+
+def _ways(option):
+    """How a trip goes, in a few words: "Train + bus", "Bus", "Train + auto"."""
+    parts = []
+    for leg in option["legs"]:
+        if leg["type"] == "transit":
+            part = MODES[leg["mode"]]["label"].lower()
+        elif leg.get("access") == "road":
+            part = "auto" if leg["distance_m"] <= AUTO_MAX_M else "taxi"
+        elif leg.get("access") == "cab":
+            part = "cab"
+        else:
+            continue
+        if not parts or parts[-1] != part:
+            parts.append(part)
+    text = " + ".join(parts) or "walk"
+    return text[0].upper() + text[1:]
+
+
+def _summarise(option, legs):
+    """The summary of `option` worked out again for these `legs`."""
+    transit = [l for l in legs if l["type"] == "transit"]
+    total_m = sum(l["distance_m"] for l in legs)
+    total_s = sum(l["duration_s"] for l in legs)
+    return dict(option["summary"], distance_m=total_m, duration_s=total_s,
+                distance_text=format_distance(total_m), duration_text=format_duration(total_s),
+                access_m=sum(l["distance_m"] for l in legs
+                             if l["type"] != "transit" and l.get("access") == option["access"]),
+                ride_m=sum(l["distance_m"] for l in transit),
+                stops_passed=sum(len(l.get("stops_passed") or []) for l in transit),
+                changes=sum(len(l.get("changes") or []) for l in transit) + len(transit) - 1)
+
+
+def _with_buses(option, access, report):
+    """`option` (a train or metro trip) with each far end - shown as "bus or
+    auto-rickshaw" - planned as a real bus ride from stop to stop. None when
+    no end is far, or no bus was found for it."""
+    legs = option["legs"]
+    transit = [l for l in legs if l["type"] == "transit"]
+    if not transit:
+        return None
+    origin = (option["origin"]["lat"], option["origin"]["lon"])
+    destination = (option["destination"]["lat"], option["destination"]["lon"])
+    ends = []
+    if legs[0].get("access") == "road":
+        first = transit[0]["from"]
+        ends.append((0, origin, (first["lat"], first["lon"]), access, first.get("name")))
+    if legs[-1].get("access") == "road":
+        last = transit[-1]["to"]
+        ends.append((len(legs) - 1, (last["lat"], last["lon"]), destination, "walk", None))
+    swaps = {}
+    for n, a, b, how, station in ends:
+        try:
+            sub = _plan_mode(a, b, "bus", report, how, alternatives=False, fast_only=True)
+        except (PlanError, overpass.OverpassError):
+            continue
+        sub_legs = [dict(l) for l in sub["legs"]]
+        if station:              # the bus's last stretch ends at the station
+            sub_legs[-1]["label"] = "%s to %s" % (ACCESS_MODES["walk"]["verb"], station)
+        swaps[n] = sub_legs
+    if not swaps:
+        return None
+    new = []
+    for n, leg in enumerate(legs):
+        new.extend(swaps.get(n, [leg]))
+    far = ("The station is far away", "The metro station is far from")
+    return dict(option, legs=new, summary=_summarise(option, new), combined=True,
+                warnings=[w for w in option.get("warnings") or []
+                          if not w["title"].startswith(far)],
+                notes=[x for x in option.get("notes") or [] if "straight-line" not in x])
+
+
+def _fare_key(option):
+    fare = option["summary"]["fare"]
+    roads = sum(1 for l in option["legs"] if l.get("access") in ("road", "cab"))
+    return (not fare["complete"], fare["min"], roads, option["summary"]["duration_s"])
+
+
+def _time_key(option):
+    return option["summary"]["duration_s"]
+
+
+def _plan_best(origin, destination, prefer, report, access):
+    """The fastest or the cheapest way, of every mode and mix that fits."""
+    direct = haversine(origin[0], origin[1], destination[0], destination[1])
+    if direct < 120:
+        raise PlanError("Your start and destination are only a short walk apart.",
+                        title="You are almost there")
+    modes = ["bus"]
+    if direct >= TRAIN_MIN_M:
+        modes.append("train")
+    if (_in_area(origin, KOCHI_METRO_AREA) and _in_area(destination, KOCHI_METRO_AREA)
+            and direct <= MODES["metro"]["max_trip_m"]):
+        modes.append("metro")
+    lock = threading.Lock()
+
+    def told(mode):
+        label = MODES[mode]["label"]
+
+        def say(stage, message):
+            with lock:
+                report(stage, "%s: %s" % (label, message))
+        return say
+
+    report("start", "Comparing %s" % " and ".join(MODES[m]["label"].lower() for m in modes))
+
+    def attempt(mode):
+        try:
+            return _plan_mode(origin, destination, mode, told(mode), access), None
+        except (PlanError, overpass.OverpassError) as exc:
+            return None, exc
+        except Exception as exc:  # noqa: BLE001 - one mode failing must not sink the rest
+            print("  %s plan failed: %r" % (mode, exc))
+            return None, exc
+
+    with ThreadPoolExecutor(max_workers=len(modes)) as pool:
+        found = list(pool.map(attempt, modes))
+
+    singles, combine = [], []
+    for mode, (result, _err) in zip(modes, found):
+        if result is None:
+            continue
+        options = [result] + list(result.pop("alternatives", None) or [])
+        singles.extend(options)
+        if mode != "bus":
+            combine.extend(sorted(options, key=_time_key)[:COMBINE_OPTIONS])
+    if not singles:
+        errors = [err for _r, err in found if isinstance(err, (PlanError, overpass.OverpassError))]
+        if errors:
+            raise errors[0]
+        raise PlanError("No way to make this trip was found. Please try again in a minute.")
+
+    mixed = []
+    if any(o["legs"][0].get("access") == "road" or o["legs"][-1].get("access") == "road"
+           for o in combine):
+        report("route", "Looking for buses to and from the stations")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            mixed = [m for m in pool.map(lambda o: _with_buses(o, access, told("bus")), combine)
+                     if m is not None]
+
+    candidates = []
+    for option in singles + mixed:
+        fares.price(option)
+        candidates.append(option)
+
+    key = _time_key if prefer == "fastest" else _fare_key
+    ranked = sorted(candidates, key=key)
+    fastest = min(candidates, key=_time_key)
+    priced = [o for o in candidates if o["summary"]["fare"]["complete"]]
+    cheapest = min(priced, key=_fare_key) if priced else None
+    # "Cheapest" only when it is: a trip with an unpriced train whose other
+    # legs alone cost less might well be cheaper.
+    if cheapest is not None and any(
+            o["summary"]["fare"]["min"] < cheapest["summary"]["fare"]["min"]
+            for o in candidates if not o["summary"]["fare"]["complete"]):
+        cheapest = None
+    # Whichever way they are sorted, the fastest and the cheapest are offered.
+    musts = [fastest] + ([cheapest] if cheapest is not None and cheapest is not fastest else [])
+    # At most two of each kind ("Bus", "Train + bus"), so three roads for
+    # the same bus do not crowd out a different way to go.
+    kinds = {}
+    for m in musts:
+        kinds[_ways(m)] = kinds.get(_ways(m), 0) + 1
+    rest = []
+    for o in ranked:
+        if any(o is m for m in musts) or kinds.get(_ways(o), 0) >= PER_KIND:
+            continue
+        kinds[_ways(o)] = kinds.get(_ways(o), 0) + 1
+        rest.append(o)
+    picked = sorted(musts + rest[:MAX_BEST_OPTIONS - len(musts)], key=key)
+
+    unpriced = any(not o["summary"]["fare"]["complete"] for o in picked)
+    for option in picked:
+        detail = option.get("option_label")
+        ways = _ways(option)
+        main = max((l for l in option["legs"] if l["type"] == "transit"),
+                   key=lambda l: l["distance_m"])
+        badges = []
+        if option is fastest:
+            badges.append("Fastest")
+        if option is cheapest:
+            badges.append("Cheapest")
+        notes = list(option.get("notes") or [])
+        notes.append("Fares are estimates from the fares KSRTC and Kochi Metro publish; "
+                     "pay what the conductor or counter asks.")
+        if unpriced:
+            notes.append("Train tickets are not priced yet (Vazhi has no official train "
+                         "fare table), so a trip with a train shows only the rest of its "
+                         "fare. Buy an unreserved ticket at the station or in the UTS app.")
+        option.update(mode=main["mode"], color=MODES[main["mode"]]["color"],
+                      mode_label=ways, option_label=ways, prefer=prefer, badges=badges,
+                      option_detail=detail if detail and detail != ways else None,
+                      notes=notes)
+    best = picked[0]
+    best["alternatives"] = picked[1:]
+    return best

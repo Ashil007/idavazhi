@@ -1647,3 +1647,12 @@ html.is-sleeping, html.is-sleeping body { background: #000; }
   #trip-sleep { order: 2; }
   .vibe { order: 5; }
 }
+
+/* Fastest / Cheapest: the row above Bus / Train / Metro, and the word on
+   an option card that says which one it is. */
+#mapprefer .mode[aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); }
+.option__badge {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  background: var(--amber-soft); color: var(--amber-text, var(--amber));
+  font-size: 12px; font-weight: 700; line-height: 18px; vertical-align: 1px;
+}
