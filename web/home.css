@@ -506,8 +506,8 @@ b, strong { font-weight: 600; }
 .guide__toc a:hover { color: var(--ink); background: var(--sand); }
 .guide__toc a.is-here { color: var(--ink); background: var(--brand-soft); }
 .guide__toc a.is-here span { color: var(--brand-deep); }
-@media (min-width: 1040px) {
-  .guide__layout { grid-template-columns: 280px 1fr; gap: 56px; align-items: start; }
+@media (min-width: 960px) {
+  .guide__layout { grid-template-columns: 260px 1fr; gap: 48px; align-items: start; }
   .guide__toc { position: sticky; top: 96px; }
   .guide__toc ol { display: block; }
 }
@@ -518,8 +518,9 @@ b, strong { font-weight: 600; }
   padding: 32px 20px;
   max-height: 72vh;
   overflow-y: auto;
-  overscroll-behavior: contain;
-  scroll-behavior: smooth;
+  /* On a phone a swipe at the end of the guide carries on down the page;
+     on a computer the wheel stays in the guide (see below). */
+  overscroll-behavior: auto;
   scroll-padding-top: 24px;
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
@@ -543,6 +544,10 @@ b, strong { font-weight: 600; }
     border-radius: var(--r-xl);
     max-height: 75vh;
   }
+}
+@media (min-width: 960px) {
+  .guide__body { max-height: calc(100vh - 128px); overscroll-behavior: contain; }
+  .guide__toc ol { max-height: calc(100vh - 128px); overflow-y: auto; }
 }
 .chapter { scroll-margin-top: 24px; }
 .chapter + .chapter { margin-top: 64px; }

@@ -20,7 +20,7 @@ import urllib.parse
 from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import (basemap, feedback, limits, locate, overpass, places, preload, router,
+from . import (basemap, crowd, feedback, limits, locate, overpass, places, preload, router,
                settings, contact, livetrains, stopnames, tickets, timings, userplaces, voice)
 from .config import ACCESS_MODES, MODES
 from .planner import PlanError, plan, prefetch
@@ -479,6 +479,13 @@ class Handler(BaseHTTPRequestHandler):
                                  "voice": voice.version()})
             elif route == "/api/voice":
                 self._voice(params)
+            elif route == "/api/crowd":
+                # How crowded riders said it was lately, at a stop going one way.
+                if self._limit("crowdread"):
+                    try:
+                        self._json(200, crowd.summary({k: v[0] for k, v in params.items()}))
+                    except crowd.CrowdError as exc:
+                        self._json(400, {"error": str(exc)})
             elif route == "/api/mapinfo":
                 self._json(200, basemap.info())
             elif route.startswith("/tiles/"):
@@ -718,6 +725,22 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/feedback":
             self._feedback_post()
+            return
+        if parsed.path == "/api/crowd":
+            # A rider's answer to "How crowded is this bus?" (crowd.py): kept in
+            # memory for 45 minutes with nothing that says who sent it.
+            if not self._limit("crowd"):
+                return
+            try:
+                crowd.report(self._body())
+                self._json(200, {"ok": True})
+            except crowd.CrowdError as exc:
+                self._json(400, {"error": str(exc)})
+            except (ValueError, UnicodeDecodeError):
+                self._json(400, {"error": "Malformed request."})
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+                self._json(500, {"error": OOPS})
             return
         if parsed.path == "/api/trains/report":
             try:

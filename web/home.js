@@ -163,33 +163,57 @@
   // The full guide: light up the topic being read in the topic list.
   var toc = document.querySelectorAll(".guide__toc a");
   var guideBody = document.querySelector(".guide__body");
-  if (toc.length && "IntersectionObserver" in window) {
-    var spy = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) {
-        if (!en.isIntersecting) return;
-        toc.forEach(function (a) {
-          a.classList.toggle("is-here", a.getAttribute("href") === "#" + en.target.id);
-        });
-      });
-    }, { root: guideBody, rootMargin: "-10% 0px -70% 0px" });
-    document.querySelectorAll(".chapter").forEach(function (c) { spy.observe(c); });
-  }
+  // The guide body scrolls on its own (home.css), so both the highlight and
+  // the topic links work in that box, not in the page.
+  var chapters = guideBody ? guideBody.querySelectorAll(".chapter") : [];
+  // Where a chapter sits inside the guide box, whatever the page scroll.
+  var topIn = function (el) {
+    return el.getBoundingClientRect().top - guideBody.getBoundingClientRect().top + guideBody.scrollTop;
+  };
+  var markHere = function () {
+    var y = guideBody.scrollTop + 80, id = chapters.length ? chapters[0].id : "";
+    // At the very bottom, the last chapter is the one being read even if short.
+    if (guideBody.scrollTop + guideBody.clientHeight >= guideBody.scrollHeight - 4) {
+      id = chapters[chapters.length - 1].id;
+    } else {
+      chapters.forEach(function (c) { if (topIn(c) <= y) id = c.id; });
+    }
+    toc.forEach(function (a) { a.classList.toggle("is-here", a.getAttribute("href") === "#" + id); });
+  };
+  if (guideBody && toc.length && chapters.length) {
+    var ticking = false;
+    guideBody.addEventListener("scroll", function () {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { ticking = false; markHere(); });
+    }, { passive: true });
+    markHere();
 
-  // Smooth scroll within the guide body when clicking TOC links
-  if (guideBody && toc.length) {
     toc.forEach(function (a) {
       a.addEventListener("click", function (e) {
-        var href = a.getAttribute("href");
-        if (href && href.charAt(0) === "#") {
-          var target = document.querySelector(href);
-          if (target && guideBody.contains(target)) {
-            e.preventDefault();
-            target.scrollIntoView({ behavior: "smooth", block: "start" });
-            if (history.pushState) history.pushState(null, null, href);
-          }
+        var target = document.getElementById((a.getAttribute("href") || "").slice(1));
+        if (!target || !guideBody.contains(target)) return;
+        e.preventDefault();
+        // Bring the guide box into view first if it is off screen ...
+        var box = guideBody.getBoundingClientRect();
+        if (box.top < 0 || box.top > window.innerHeight * 0.5) {
+          window.scrollTo({ top: window.pageYOffset + box.top - 96, behavior: "smooth" });
         }
+        // ... then move only the box to the chapter.
+        guideBody.scrollTo({ top: Math.max(0, topIn(target) - 24), behavior: "smooth" });
+        if (history.replaceState) history.replaceState(null, "", a.getAttribute("href"));
       });
     });
+
+    // A link such as /#g-alarm from elsewhere: open that chapter in the box.
+    var h = window.location.hash;
+    if (h && h.length > 1) {
+      var fromLink = document.getElementById(h.slice(1));
+      if (fromLink && guideBody.contains(fromLink)) {
+        guideBody.scrollTop = Math.max(0, topIn(fromLink) - 24);
+        markHere();
+      }
+    }
   }
 
   // The three-bar menu on phones: open and close it; a tap on a section,

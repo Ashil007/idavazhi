@@ -5,15 +5,18 @@
  *   fresh when online, so an update shows up on the next open; the cache is
  *   only the fallback.
  * - Trip plans, place search, bus times and map tiles always go to the
- *   server, never the cache: stale answers there would mislead.
+ *   server, never the cache: stale answers there would mislead. The one
+ *   exception is a saved trip (trips.js): with no internet, the map tiles
+ *   kept along its route are used, so the map still shows the ride.
  * - Trip-alert notifications: Android shows web notifications only through a
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v65";
+var CACHE = "vazhi-shell-v67";
+var OFFLINE = "vazhi-offline-trips";     // saved trips' routes and map tiles (trips.js)
 var SHELL = [
   "/", "/app", "home.css", "home.js", "theme.js", "style.css", "manifest.webmanifest",
-  "basemap.js", "sheet.js", "drawer.js", "alerts.js", "outbox.js", "times.js", "stops.js", "livetrain.js", "install.js", "permit.js", "notice.js", "about.js", "app.js",
+  "basemap.js", "sheet.js", "drawer.js", "alerts.js", "outbox.js", "times.js", "stops.js", "livetrain.js", "install.js", "permit.js", "notice.js", "about.js", "app.js", "vibes.js", "sleep.js", "trips.js", "crowd.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/favicon-32.png",
   // The sea and the basic letters of the map; map tiles stay online-only.
   "map/sea.geojson", "map/region.geojson", "fonts/Noto%20Sans%20Regular/0-255.pbf", "fonts/Noto%20Sans%20Medium/0-255.pbf",
@@ -34,7 +37,7 @@ self.addEventListener("install", function (event) {
 
 self.addEventListener("activate", function (event) {
   event.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== CACHE; })
+    return Promise.all(keys.filter(function (k) { return k !== CACHE && k !== OFFLINE; })
                            .map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
@@ -50,7 +53,15 @@ self.addEventListener("fetch", function (event) {
   var req = event.request;
   if (req.method !== "GET") return;
   var url = new URL(req.url);
-  if (!isShell(url)) return;              // plans, search, tiles: straight to the network
+  if (url.origin === self.location.origin && /^\/tiles\//.test(url.pathname)) {
+    // Map tiles: the network, and only without it a saved trip's copy.
+    event.respondWith(fetch(req).catch(function () {
+      return caches.open(OFFLINE).then(function (c) { return c.match(url.pathname); })
+        .then(function (hit) { return hit || Response.error(); });
+    }));
+    return;
+  }
+  if (!isShell(url)) return;              // plans, search: straight to the network
   event.respondWith(fetch(req).then(function (res) {
     if (res.ok) {
       var copy = res.clone();

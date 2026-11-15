@@ -299,6 +299,7 @@ var ALERTS = (function () {
   }
 
   var ringing = false;
+  var buzzTimer = null;     // the alarm's repeating vibration
 
   // Ring until silence(): the looping sound (or, if the browser will not
   // play it, the page's own beeps), with vibration, over and over. With
@@ -307,7 +308,11 @@ var ALERTS = (function () {
   function ring(say) {
     stopRinging();
     ringing = true;
-    vibrate([700, 300, 700, 300, 1200]);
+    // The rider's buzz (vibes.js: Gentle pulse, Heartbeat, Urgent rumble,
+    // SOS), repeated for as long as the alarm rings.
+    var buzz = (window.VIBES && VIBES.pattern()) || [700, 300, 700, 300, 1200];
+    var buzzEvery = Math.max(1400, buzz.reduce(function (a, b) { return a + b; }, 0) + 600);
+    vibrate(buzz);
     if (bgAudio) { try { bgAudio.pause(); } catch (e) {} }
     var s = silent() ? null : ensureSiren();
     var beepToo = !s;
@@ -333,8 +338,8 @@ var ALERTS = (function () {
     if (!announce()) play();
     beepTimer = setInterval(function () {
       if (beepToo && !silent() && !talking) beep();
-      vibrate([700, 300, 700]);
     }, 1400);
+    buzzTimer = setInterval(function () { vibrate(buzz); }, buzzEvery);
     if (say) voiceTimer = setInterval(announce, SAY_EVERY_MS);
   }
 
@@ -342,6 +347,8 @@ var ALERTS = (function () {
     ringing = false;
     clearInterval(beepTimer);
     beepTimer = null;
+    clearInterval(buzzTimer);
+    buzzTimer = null;
     clearInterval(voiceTimer);
     voiceTimer = null;
     stopSpeaking();
@@ -1048,6 +1055,10 @@ var ALERTS = (function () {
       say("prewake", t);
     }
     var eta = secs ? " · about " + Math.max(1, Math.round(secs / 60)) + " min" : "";
+    // For the sleep screen (sleep.js) and the crowding question (crowd.js).
+    document.dispatchEvent(new CustomEvent("vazhi:progress", { detail: {
+      name: t.name, final: t.final, dist: dist, secs: secs, speed: speed,
+      simulating: simulating, at: last.at, plan: plan } }));
     el("trip-status").innerHTML = (simulating ? "<b>Demo ride</b> · " : "<b>Tracking</b> · ") +
       (t.final ? "your stop " : "change at ") + "<b>" + escape(t.name) + "</b>: " +
       fmtDist(dist) + eta;
@@ -1267,6 +1278,11 @@ var ALERTS = (function () {
     el("trip-stop").hidden = true;
     el("trip-status").hidden = false;
     el("trip-status").textContent = "Starting…";
+    // After start() or simulate() has said which kind of ride this is.
+    window.setTimeout(function () {
+      if (running) document.dispatchEvent(new CustomEvent("vazhi:tripstart",
+        { detail: { simulating: simulating, plan: plan } }));
+    }, 0);
   }
 
   function start() {

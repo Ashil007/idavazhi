@@ -1481,3 +1481,169 @@ html, body {
 
 /* A switch that is not for this trip (train sharing on a bus trip). */
 .switch[hidden] { display: none; }
+
+/* ==================================================================
+   Saved trips (trips.js): chips under the search boxes, and the
+   "Save trip" button with its small panel under a planned trip. */
+.savedtrips { margin-top: 12px; }
+.savedtrips__row { display: flex; gap: 8px; overflow-x: auto; padding: 8px 8px 6px 2px; scrollbar-width: none; }
+.savedtrips__row::-webkit-scrollbar { display: none; }
+.tripchip {
+  position: relative; flex: none; display: flex; align-items: center; gap: 10px; min-height: 52px;
+  max-width: 240px; padding: 6px 14px 6px 12px; border: 0; border-radius: 14px; cursor: pointer;
+  background: var(--panel-2); color: var(--ink); font: inherit; text-align: left; box-shadow: var(--sh-1);
+}
+.tripchip:hover { background: var(--panel-3); }
+.tripchip:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.tripchip svg { flex: none; width: 20px; height: 20px; color: var(--amber); }
+.tripchip--work svg { color: var(--accent); }
+.tripchip--custom svg { color: var(--ink-dim); }
+.tripchip__t { min-width: 0; display: flex; flex-direction: column; }
+.tripchip__t b { font-size: 15px; font-weight: 600; line-height: 20px; }
+.tripchip__t span { font-size: 13px; line-height: 18px; color: var(--ink-faint); white-space: nowrap;
+                    overflow: hidden; text-overflow: ellipsis; }
+.tripchip__off { flex: none; padding: 2px 6px; border-radius: 6px; background: rgba(34, 160, 107, .16);
+                 color: #7fd3a8; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.tripchip__x { display: none; position: absolute; top: -6px; right: -6px; width: 22px; height: 22px;
+               border-radius: 50%; background: var(--danger); color: #fff; font-size: 16px; line-height: 22px;
+               text-align: center; font-weight: 700; }
+.savedtrips.is-editing .tripchip__x { display: block; }
+.savedtrips.is-editing .tripchip:not(.tripchip--edit) { box-shadow: inset 0 0 0 1px rgba(242, 104, 107, .5); }
+.tripchip--edit { min-height: 52px; padding: 0 14px; background: none; box-shadow: none; color: var(--ink-faint);
+                  font-size: 14px; font-weight: 600; }
+.tripchip--edit:hover { background: var(--panel-2); color: var(--ink); }
+
+.savetrip { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 8px; }
+.savetrip svg { width: 20px; height: 20px; }
+.savetrip.is-saved { color: var(--amber); background: var(--amber-soft); }
+.savetrip.is-saved svg { fill: currentColor; }
+.savebox { margin: 0 0 12px; padding: 16px; border-radius: var(--radius-lg); background: var(--panel-2); }
+.savebox[hidden] { display: none; }
+.savebox__q { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--ink-dim); }
+.savebox__kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.savebox__kinds button {
+  min-height: 44px; border: 0; border-radius: 12px; cursor: pointer; font: inherit; font-size: 15px; font-weight: 600;
+  background: var(--panel-3); color: var(--ink);
+}
+.savebox__kinds button:hover { background: var(--hover); }
+.savebox__kinds button[aria-checked="true"] { background: var(--amber); color: var(--amber-ink); }
+.savebox__name {
+  width: 100%; margin-top: 10px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font: inherit; font-size: 16px;
+}
+.savebox__name:focus { outline: none; border-color: var(--amber); }
+.savebox__name[hidden] { display: none; }
+.savebox__msg { margin: 10px 0 0; font-size: 14px; line-height: 20px; color: var(--ink-dim); }
+.savebox__msg:empty { display: none; }
+#trip-save-have .savebox__msg { margin-top: 0; }
+.savebox__acts { display: flex; gap: 8px; margin-top: 12px; }
+.savebox__ok, .savebox__cancel {
+  min-height: 44px; padding: 0 18px; border: 0; border-radius: 12px; cursor: pointer; font: inherit; font-size: 15px; font-weight: 600;
+}
+.savebox__ok { background: var(--amber); color: var(--amber-ink); flex: 1; }
+.savebox__cancel { background: var(--panel-3); color: var(--ink-dim); }
+#trip-save-have .savebox__cancel { margin-top: 12px; width: 100%; }
+.savebox__note { margin: 12px 0 0; font-size: 13px; line-height: 18px; color: var(--ink-faint); }
+.savebox__kinds button:focus-visible, .savebox__ok:focus-visible, .savebox__cancel:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+/* ==================================================================
+   Vibration patterns (vibes.js), under "Vibrate only". */
+.vibe { padding: 14px 16px 16px; border-radius: var(--radius-lg); background: var(--panel-2); }
+.vibe[hidden] { display: none; }
+.vibe__label { display: block; margin-bottom: 10px; font-size: 16px; font-weight: 600; color: var(--ink); }
+.vibe__label span { margin-left: 6px; font-size: 14px; font-weight: 400; color: var(--ink-faint); }
+.vibe__chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vibe__chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 60px; padding: 10px 12px;
+  border: 0; border-radius: 12px; cursor: pointer; background: var(--panel-3); color: var(--ink);
+  font: inherit; font-size: 15px; font-weight: 600; text-align: left;
+}
+.vibe__chip:hover { background: var(--hover); }
+.vibe__chip[aria-checked="true"] { background: var(--amber); color: var(--amber-ink); }
+.vibe__chip:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.vibe__bars { width: 64px; height: 14px; fill: currentColor; opacity: .75; }
+
+/* ==================================================================
+   Sleep screen (sleep.js): pure black, so AMOLED pixels are off; the
+   little text there is is dim grey. Under the alarm (z-index 5000). */
+.trip__sleep { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.trip__sleep svg { width: 20px; height: 20px; }
+.trip__sleep span { color: var(--ink-faint); font-weight: 500; }
+.trip__sleep[hidden] { display: none; }
+.sleep {
+  position: fixed; inset: 0; z-index: 4900; background: #000; color: #8a8a8a; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color: transparent; outline: none;
+}
+.sleep[hidden] { display: none; }
+.sleep__inner { transition: transform 2s ease; max-width: 520px; }
+.sleep p { margin: 0; }
+.sleep__label { font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: #5e5e5e; }
+.sleep .sleep__stop { margin-top: 6px; font-size: 26px; font-weight: 600; line-height: 1.25; color: #9a9a9a; }
+.sleep .sleep__dist { margin-top: 18px; font-size: clamp(64px, 22vw, 120px); font-weight: 700; line-height: 1;
+                      letter-spacing: -.03em; color: #b0b0b0; font-variant-numeric: tabular-nums; }
+.sleep .sleep__speed { margin-top: 14px; min-height: 24px; font-size: 18px; color: #7a7a7a; font-variant-numeric: tabular-nums; }
+.sleep .sleep__gps { margin-top: 28px; display: inline-block; padding: 4px 12px; border-radius: 999px;
+                     border: 1px solid #262626; font-size: 14px; color: #6f8f7a; }
+.sleep .sleep__gps.is-bad { color: #b3886a; }
+.sleep .sleep__hint { margin-top: 40px; font-size: 13px; color: #4a4a4a; }
+html.is-sleeping, html.is-sleeping body { background: #000; }
+@media (prefers-reduced-motion: reduce) { .sleep__inner { transition: none; } }
+
+/* ==================================================================
+   Crowding (crowd.js): the pill on route options and the summary, and
+   the one-question card during a ride. */
+.crowd {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; line-height: 20px; white-space: nowrap;
+}
+.crowd::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.crowd--seats { background: rgba(34, 160, 107, .16); color: #7fd3a8; }
+.crowd--standing { background: var(--amber-soft); color: var(--amber); }
+.crowd--packed { background: rgba(242, 104, 107, .15); color: #ff9b9d; }
+.crowd--usual { background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink-dim); }
+.crowd--usual.crowd--seats::before { background: #7fd3a8; }
+.crowd--usual.crowd--packed::before { background: #ff9b9d; }
+.option .crowd { grid-column: 1 / -1; justify-self: start; margin-top: 2px; }
+.crowd-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -6px 0 16px; }
+.crowd-line[hidden] { display: none; }
+.crowd-line__label { font-size: 14px; color: var(--ink-faint); }
+
+.crowd-card {
+  position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 1600;
+  transform: translateX(-50%); width: min(420px, calc(100vw - 24px)); padding: 14px 16px 12px;
+  border-radius: var(--radius-lg); background: var(--panel-2); box-shadow: var(--sh-5);
+  animation: crowd-in .25s ease-out;
+}
+.crowd-card[hidden] { display: none; }
+.crowd-card__head { display: flex; align-items: flex-start; gap: 12px; }
+.crowd-card__head p { flex: 1; margin: 4px 0 0; font-size: 17px; font-weight: 600; line-height: 24px; color: var(--ink); }
+.crowd-card__x { flex: none; width: 36px; height: 36px; border: 0; border-radius: 10px; background: var(--panel-3);
+                 color: var(--ink-dim); cursor: pointer; display: grid; place-items: center; }
+.crowd-card__x svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; fill: none; }
+.crowd-card__buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.crowd-card__buttons[hidden] { display: none; }
+.crowd-card__buttons button {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border: 0;
+  border-radius: 12px; background: var(--panel-3); color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.crowd-card__buttons button:hover { background: var(--hover); }
+.crowd-card__buttons button:focus-visible, .crowd-card__x:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.crowd-dot { width: 10px; height: 10px; border-radius: 50%; }
+.crowd-dot--seats { background: #4cc38a; }
+.crowd-dot--standing { background: var(--amber); }
+.crowd-dot--packed { background: var(--danger); }
+.crowd-card__thanks { margin: 12px 0 4px; font-size: 15px; color: #7fd3a8; }
+.crowd-card__thanks[hidden] { display: none; }
+.crowd-card__note { margin: 10px 0 0; font-size: 12px; color: var(--ink-faint); }
+@keyframes crowd-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .crowd-card { animation: none; } }
+
+@media (max-width: 860px) {
+  .savedtrips { order: 4; margin-top: 4px; }
+  .crowd-line { order: 2; }
+  #trip-save, #trip-save-box { order: 6; }
+  #trip-sleep { order: 2; }
+  .vibe { order: 5; }
+}

@@ -56,6 +56,31 @@
     <button type="button" id="alarm-ok">I'm awake</button>
   </div>
 </div>
+<!-- Sleep screen (sleep.js): pure black while the alarm keeps working. -->
+<div class="sleep" id="sleep" hidden role="button" tabindex="0" aria-label="Sleep screen. Tap to wake the screen">
+  <div class="sleep__inner" id="sleep-inner">
+    <p class="sleep__label" id="sleep-label">Your stop</p>
+    <p class="sleep__stop" id="sleep-stop">Your stop</p>
+    <p class="sleep__dist" id="sleep-dist">&mdash;</p>
+    <p class="sleep__speed" id="sleep-speed"></p>
+    <p class="sleep__gps" id="sleep-gps">Waiting for GPS</p>
+    <p class="sleep__hint">The alarm is on &middot; tap to wake the screen</p>
+  </div>
+</div>
+<!-- "How crowded is this bus?" (crowd.js), once per ride. -->
+<div class="crowd-card" id="crowd-card" hidden role="dialog" aria-labelledby="crowd-card-q">
+  <div class="crowd-card__head">
+    <p id="crowd-card-q">How crowded is this bus right now?</p>
+    <button type="button" class="crowd-card__x" id="crowd-card-close" aria-label="Don't ask again on this trip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="crowd-card__buttons" id="crowd-card-buttons">
+    <button type="button" data-crowd="seats"><i class="crowd-dot crowd-dot--seats"></i>Seats</button>
+    <button type="button" data-crowd="standing"><i class="crowd-dot crowd-dot--standing"></i>Standing</button>
+    <button type="button" data-crowd="packed"><i class="crowd-dot crowd-dot--packed"></i>Packed</button>
+  </div>
+  <p class="crowd-card__thanks" id="crowd-card-thanks" hidden></p>
+  <p class="crowd-card__note">Anonymous. Kept 45 minutes, then forgotten.</p>
+</div>
 <div class="app">
   <aside class="panel">
     <div class="sheet-handle" id="sheet-handle" role="button" tabindex="0"
@@ -103,6 +128,11 @@
       <p class="where" id="where" hidden></p>
     </section>
 
+    <!-- Saved trips (trips.js): one tap plans the daily ride. -->
+    <div class="savedtrips" id="saved-trips" hidden>
+      <div class="savedtrips__row" id="saved-trips-row" role="group" aria-label="Saved trips"></div>
+    </div>
+
 
     <button class="plan" id="plan">Plan journey</button>
     <button class="ghost" id="clear">Clear</button>
@@ -125,7 +155,32 @@
       </div>
       <div class="options" id="options" hidden></div>
       <div class="summary" id="summary"></div>
+      <div class="crowd-line" id="crowd-line" hidden></div>
       <div class="leave" id="leave" hidden></div>
+      <button type="button" class="ghost savetrip" id="trip-save" aria-pressed="false" aria-controls="trip-save-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+        <span id="trip-save-text">Save trip</span></button>
+      <div class="savebox" id="trip-save-box" hidden>
+        <div id="trip-save-pick">
+          <p class="savebox__q">Save this trip as</p>
+          <div class="savebox__kinds" id="trip-save-kinds" role="radiogroup" aria-label="Save as">
+            <button type="button" role="radio" data-kind="home" aria-checked="true">Home</button>
+            <button type="button" role="radio" data-kind="work" aria-checked="false">Work</button>
+            <button type="button" role="radio" data-kind="custom" aria-checked="false">Other&hellip;</button>
+          </div>
+          <input type="text" class="savebox__name" id="trip-save-name" maxlength="24" placeholder="Name it, like College or Gym" aria-label="Name for this trip" hidden />
+          <p class="savebox__msg" id="trip-save-msg" aria-live="polite"></p>
+          <div class="savebox__acts">
+            <button type="button" class="savebox__ok" id="trip-save-ok">Save</button>
+            <button type="button" class="savebox__cancel" id="trip-save-cancel">Cancel</button>
+          </div>
+          <p class="savebox__note">Kept on this phone only, with a copy of the route and map for when there's no internet.</p>
+        </div>
+        <div id="trip-save-have" hidden>
+          <p class="savebox__msg" id="trip-save-have-text" aria-live="polite"></p>
+          <button type="button" class="savebox__cancel" id="trip-save-remove">Remove from saved trips</button>
+        </div>
+      </div>
       <button type="button" class="ghost share" id="share">Share this trip</button>
       <div class="warnings" id="warnings" hidden></div>
       <div class="trip" id="trip" hidden>
@@ -192,6 +247,10 @@
           <input type="checkbox" id="trip-silent" role="switch" />
           <span class="switch__track" aria-hidden="true"></span>
         </label>
+        <div class="vibe" id="trip-vibe-row" hidden>
+          <span class="vibe__label" id="trip-vibe-label">Vibration <span>Tap to feel it</span></span>
+          <div class="vibe__chips" id="trip-vibes" role="radiogroup" aria-labelledby="trip-vibe-label"></div>
+        </div>
         <label class="switch trip__share" id="trip-share" hidden>
           <span class="switch__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M9 20l-2 2M15 20l2 2"/></svg></span>
           <span class="switch__text"><b>Share where this train is</b><span>Anonymous. Helps riders waiting for it</span></span>
@@ -199,6 +258,9 @@
           <span class="switch__track" aria-hidden="true"></span>
         </label>
         <button type="button" class="trip__start" id="trip-start">Wake me before my stop</button>
+        <button type="button" class="ghost trip__sleep" id="trip-sleep" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+          Sleep screen <span>&middot; saves battery</span></button>
         <button type="button" class="ghost trip__sim" id="trip-sim">See how the alarm works (demo)</button>
         <button type="button" class="ghost" id="trip-stop" hidden>Stop trip alerts</button>
         <p class="trip__status" id="trip-status" hidden></p>
@@ -256,7 +318,9 @@
 <script src="basemap.js"></script>
 <script src="sheet.js"></script>
 <script src="drawer.js"></script>
+<script src="vibes.js"></script>
 <script src="alerts.js"></script>
+<script src="sleep.js"></script>
 <script src="outbox.js"></script>
 <script src="times.js"></script>
 <script src="stops.js"></script>
@@ -267,5 +331,7 @@
 <script src="vendor/qrcode/qrcode.js"></script>
 <script src="about.js"></script>
 <script src="app.js"></script>
+<script src="trips.js"></script>
+<script src="crowd.js"></script>
 </body>
 </html>

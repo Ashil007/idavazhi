@@ -26,7 +26,9 @@ LIMITS = {
     "feedback": (6, 3600),    # messages to the maker (feedback.py)
     "inbox": (300, 3600),     # the owner's Messages app, every 30 s, plus wrong passwords
     "ticket": (20, 3600),     # Razorpay orders for bus tickets (tickets.py)
-    "voice": (60, 3600),      # new spoken alarm lines from ElevenLabs (voice.py)
+    "voice": (60, 3600),
+    "crowd": (20, 3600),      # "How crowded is this bus?" answers (crowd.py)
+    "crowdread": (600, 3600), # the crowding pill on route options      # new spoken alarm lines from ElevenLabs (voice.py)
 }
 
 _lock = threading.Lock()
