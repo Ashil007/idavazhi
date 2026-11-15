@@ -1,9 +1,15 @@
-"""Spoken Malayalam announcements for the trip alarm, made by ElevenLabs.
+"""Spoken Malayalam announcements for the trip alarm.
 
 The phone's own voice (speechSynthesis) sounds like a robot, so the alarm's
-lines are spoken by an ElevenLabs voice instead, in pure Malayalam.
+lines are spoken by a natural voice instead, in pure Malayalam. Two services
+can make them:
 
-To keep ElevenLabs' monthly allowance from running out, a line is not made
+  - Sarvam AI's Bulbul (sarvam.ai), made for Indian languages: a native
+    Malayalam speaker. Used whenever its key is set.
+  - ElevenLabs. Its free plan offers only American and British voices,
+    which read Malayalam with a foreign accent.
+
+To keep the service's allowance from running out, a line is not made
 whole for every stop. It is stitched from saved pieces:
 
     "ഉണരൂ! നിങ്ങൾ ഇറങ്ങേണ്ട സ്ഥലം,"  +  "വൈറ്റില"  +  "അടുത്തെത്തി. ഇറങ്ങാൻ ഒരുങ്ങുക."
@@ -26,16 +32,25 @@ answer, the app falls back to the phone's own voice (GET /api/voice/lines).
 
 Settings (data/vazhi.env, never in git):
 
+    VAZHI_VOICE_PROVIDER     "sarvam" or "elevenlabs"; by default Sarvam when
+                             its key is set, otherwise ElevenLabs
+    VAZHI_SARVAM_KEY         the API key (dashboard.sarvam.ai -> API Keys)
+    VAZHI_SARVAM_SPEAKER     the voice (default pooja, Sarvam's choice for
+                             a Malayalam woman's voice)
+    VAZHI_SARVAM_MODEL       default bulbul:v3
+    VAZHI_SARVAM_PACE        speed, 0.5 to 2.0 (default 0.95: a touch slower,
+                             for a rider who has just woken up)
     VAZHI_ELEVENLABS_KEY     the API key (elevenlabs.io: Profile -> API Keys)
     VAZHI_ELEVENLABS_VOICE   the voice id (default: the voice chosen for Vazhi)
     VAZHI_ELEVENLABS_MODEL   default eleven_v3, which speaks Malayalam
     VAZHI_VOICE_DAILY_CHARS  the most characters of new stop names sent to
-                             ElevenLabs in a day (default 300). The fixed
+                             the voice service in a day (default 300). The fixed
                              phrases are not counted: they are made only once.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -52,6 +67,11 @@ CACHE_DIR = os.path.join(ROOT, ".cache", "voice")
 API = "https://api.elevenlabs.io/v1/text-to-speech/%s?output_format=mp3_44100_64"
 DEFAULT_VOICE = "nF5xXwlriNhsorW8Fykg"
 DEFAULT_MODEL = "eleven_v3"
+SARVAM_API = "https://api.sarvam.ai/text-to-speech"
+SARVAM_SPEAKER = "pooja"
+SARVAM_MODEL = "bulbul:v3"
+SARVAM_PACE = "0.95"
+SARVAM_RATE = 44100           # MPEG-1 MP3, which the joining below reads best
 TIMEOUT_S = 30
 MAX_NAME = 60
 
@@ -105,8 +125,40 @@ class VoiceError(Exception):
     """A line that cannot be made, with a message for the caller."""
 
 
+def provider() -> str:
+    """Which service makes the clips: "sarvam" or "elevenlabs"."""
+    chosen = (settings.get("VAZHI_VOICE_PROVIDER") or "").strip().lower()
+    if chosen in ("sarvam", "elevenlabs"):
+        return chosen
+    return "sarvam" if settings.get("VAZHI_SARVAM_KEY") else "elevenlabs"
+
+
+def _service_name() -> str:
+    return "Sarvam" if provider() == "sarvam" else "ElevenLabs"
+
+
+def _pace() -> float:
+    try:
+        return min(2.0, max(0.5, float(settings.get("VAZHI_SARVAM_PACE") or SARVAM_PACE)))
+    except ValueError:
+        return float(SARVAM_PACE)
+
+
+def _identity() -> str:
+    """The voice and every setting that changes how it sounds. Clips are
+    saved under it, so changing any of these makes new clips."""
+    if provider() == "sarvam":
+        return "sarvam:%s|%s|ml-IN|%.2f|%d" % (
+            settings.get("VAZHI_SARVAM_SPEAKER") or SARVAM_SPEAKER,
+            settings.get("VAZHI_SARVAM_MODEL") or SARVAM_MODEL, _pace(), SARVAM_RATE)
+    # ElevenLabs keeps its old form, so the clips already saved stay valid.
+    return "%s|%s" % (settings.get("VAZHI_ELEVENLABS_VOICE") or DEFAULT_VOICE,
+                      settings.get("VAZHI_ELEVENLABS_MODEL") or DEFAULT_MODEL)
+
+
 def enabled() -> bool:
-    return bool(settings.get("VAZHI_ELEVENLABS_KEY"))
+    key = "VAZHI_SARVAM_KEY" if provider() == "sarvam" else "VAZHI_ELEVENLABS_KEY"
+    return bool(settings.get(key))
 
 
 def _clean(name):
@@ -140,9 +192,7 @@ def pieces(kind: str, name: str = "", name_ml: str = ""):
 
 
 def _path(text: str) -> str:
-    voice = settings.get("VAZHI_ELEVENLABS_VOICE") or DEFAULT_VOICE
-    model = settings.get("VAZHI_ELEVENLABS_MODEL") or DEFAULT_MODEL
-    key = "%s|%s|%s" % (voice, model, text)
+    key = "%s|%s" % (_identity(), text)
     return os.path.join(CACHE_DIR, hashlib.sha1(key.encode("utf-8")).hexdigest() + ".mp3")
 
 
@@ -150,9 +200,7 @@ def version() -> str:
     """A short tag for the voice and model in use. The app puts it in each
     clip's address, so phones fetch new clips when the voice is changed
     instead of keeping the old ones for a month."""
-    voice = settings.get("VAZHI_ELEVENLABS_VOICE") or DEFAULT_VOICE
-    model = settings.get("VAZHI_ELEVENLABS_MODEL") or DEFAULT_MODEL
-    return hashlib.sha1(("%s|%s" % (voice, model)).encode("utf-8")).hexdigest()[:8]
+    return hashlib.sha1(_identity().encode("utf-8")).hexdigest()[:8]
 
 
 def cached(text: str):
@@ -181,6 +229,36 @@ def _budget_ok(chars: int) -> bool:
 
 
 def _request(text: str) -> bytes:
+    """Ask the voice service to speak `text`; the MP3 bytes."""
+    return _request_sarvam(text) if provider() == "sarvam" else _request_elevenlabs(text)
+
+
+def _request_sarvam(text: str) -> bytes:
+    """Ask Sarvam's Bulbul to speak `text` in Malayalam; the MP3 bytes."""
+    body = {"text": text, "language_code": "ml-IN",
+            "model": settings.get("VAZHI_SARVAM_MODEL") or SARVAM_MODEL,
+            "speaker": settings.get("VAZHI_SARVAM_SPEAKER") or SARVAM_SPEAKER,
+            "pace": _pace(), "speech_sample_rate": SARVAM_RATE, "output_audio_codec": "mp3"}
+
+    def send(payload):
+        req = urllib.request.Request(SARVAM_API, data=json.dumps(payload).encode("utf-8"), method="POST",
+                                     headers={"api-subscription-key": settings.get("VAZHI_SARVAM_KEY"),
+                                              "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+            return json.load(resp)
+    try:
+        answer = send(body)
+    except urllib.error.HTTPError as exc:
+        # Older versions of the API call the language "target_language_code".
+        if exc.code not in (400, 422):
+            raise
+        body["target_language_code"] = body.pop("language_code")
+        answer = send(body)
+    audios = answer.get("audios") or []
+    return base64.b64decode("".join(audios)) if audios else b""
+
+
+def _request_elevenlabs(text: str) -> bytes:
     """Ask ElevenLabs to speak `text`; the MP3 bytes."""
     voice = settings.get("VAZHI_ELEVENLABS_VOICE") or DEFAULT_VOICE
     body = json.dumps({"text": text,
@@ -196,9 +274,9 @@ def _request(text: str) -> bytes:
 
 def clip(text: str, phrase: bool = False):
     """(mp3 bytes, made_now) for one piece: the saved clip, or a new one from
-    ElevenLabs. Stop names count against the day's allowance; the fixed
+    the voice service. Stop names count against the day's allowance; the fixed
     phrases (`phrase`) do not, as there are only a few and each is made once.
-    VoiceError when there is no key, the allowance is spent, or ElevenLabs
+    VoiceError when there is no key, the allowance is spent, or the service
     does not answer - the app then uses the phone's voice."""
     data = cached(text)
     if data:
@@ -219,10 +297,10 @@ def clip(text: str, phrase: bool = False):
                 detail = exc.read().decode("utf-8", "replace")[:300]
             except Exception:  # noqa: BLE001
                 pass
-            print("  ElevenLabs refused a line: HTTP %s %s" % (exc.code, detail), flush=True)
+            print("  %s refused a line: HTTP %s %s" % (_service_name(), exc.code, detail), flush=True)
             raise VoiceError("The voice service refused the line.") from None
         except Exception as exc:  # noqa: BLE001 - timeouts, no internet
-            print("  ElevenLabs did not answer: %s" % exc, flush=True)
+            print("  %s did not answer: %s" % (_service_name(), exc), flush=True)
             raise VoiceError("The voice service did not answer.") from None
         if not data or len(data) < 100:
             raise VoiceError("The voice service sent no sound.")
@@ -323,10 +401,35 @@ def _trim_tail(frames: bytes) -> bytes:
     return frames if keep >= len(starts) else frames[:starts[keep]]
 
 
+HEAD_FRAMES = 3          # silence kept before a piece that follows another
+
+
+def _trim_head(frames: bytes) -> bytes:
+    """A piece without the silence some voices (Sarvam's) put before it - up
+    to a second after a stop's name - so the next words follow at once.
+    Untouched when the frames cannot be read."""
+    starts, gains, i = [], [], 0
+    while i < len(frames):
+        n = _frame_len(frames, i)
+        if not n:
+            break
+        starts.append(i)
+        gains.append(_gain(frames, i))
+        i += n
+    if len(gains) < 12 or None in gains:
+        return frames
+    loud = max(gains[:-2]) - QUIET
+    first = min(k for k, g in enumerate(gains) if g >= loud)
+    drop = first - HEAD_FRAMES
+    return frames[starts[drop]:] if drop > 0 else frames
+
+
 def join(clips) -> bytes:
     """One MP3 from several pieces, in order, with the pauses between them
-    shortened."""
+    shortened: the silence at the end of each piece and at the start of the
+    next."""
     out = [_frames(c) for c in clips]
+    out = out[:1] + [_trim_head(f) for f in out[1:]]
     return b"".join([_trim_tail(f) for f in out[:-1]] + out[-1:])
 
 

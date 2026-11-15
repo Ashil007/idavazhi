@@ -368,7 +368,7 @@ var ALERTS = (function () {
   // The alarm speaks pure Malayalam (transitnav/voice.py; the server's copy
   // from GET /api/voice/lines replaces this one). The natural voice is
   // stitched on the server from saved pieces - fixed phrases and the stop's
-  // name - so a new stop costs ElevenLabs only its name.
+  // name - so a new stop costs the voice service only its name.
   var ML = {
     prewake: "ശ്രദ്ധിക്കുക. {name} അടുത്തുവരുന്നു. രണ്ടു നിമിഷത്തിനുള്ളിൽ ഉണർത്തുമണി മുഴങ്ങും.",
     wake: "ഉണരൂ! നിങ്ങൾ ഇറങ്ങേണ്ട സ്ഥലം, {name}, അടുത്തെത്തി. ഇറങ്ങാൻ ഒരുങ്ങുക.",
@@ -392,7 +392,7 @@ var ALERTS = (function () {
     arrive_change: "This is {name}. Get off here and change.",
     leave: "It's time to leave for your bus."
   };
-  var clipsOn = false;        // the server has a natural voice (ElevenLabs)
+  var clipsOn = false;        // the server has a natural voice (Sarvam or ElevenLabs)
   var clips = {};             // "kind|stop" -> the clip, kept in memory for the ride
   var clipAudio = null;       // plays the clips
   var clipVoice = "";         // the server's voice tag: a new voice means new clip addresses

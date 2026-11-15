@@ -100,6 +100,12 @@ class VoiceTest(unittest.TestCase):
         # The name keeps 4 frames (~0.1 s) of its silence; the last piece keeps all.
         self.assertEqual(len(joined), (10 + voice.TAIL_FRAMES + 10) * 208)
         self.assertEqual(voice.join([name]), name)
+        # Silence before a later piece goes too, keeping HEAD_FRAMES of it.
+        late = hush + speech
+        joined = voice.join([speech, late])
+        self.assertEqual(len(joined), (10 + voice.HEAD_FRAMES + 10) * 208)
+        # The first piece keeps its opening as it is.
+        self.assertEqual(voice.join([late]), late)
 
     def test_no_key_means_no_clips(self):
         self.env.clear()
@@ -115,6 +121,86 @@ class VoiceTest(unittest.TestCase):
             with self.assertRaises(voice.VoiceError):
                 voice.clip("ഇടപ്പള്ളി")                                   # 7 more: past 10
             self.assertEqual(voice._spent["chars"], 7)
+
+
+class SarvamTest(unittest.TestCase):
+    """Sarvam's Bulbul: a native Malayalam voice, used when its key is set."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.env = {"VAZHI_ELEVENLABS_KEY": "eleven-key"}
+        patches = [
+            mock.patch.object(voice, "CACHE_DIR", self.dir),
+            mock.patch.object(voice.settings, "get", lambda k, d="": self.env.get(k, d)),
+            mock.patch.dict(voice._spent, {"day": "", "chars": 0}),
+        ]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        self.addCleanup(shutil.rmtree, self.dir, True)
+
+    def answer(self, data):
+        import io
+        import json
+        resp = io.BytesIO(json.dumps({"request_id": "r", "audios": [
+            __import__("base64").b64encode(data).decode()]}).encode())
+        resp.__enter__ = lambda *a: resp
+        resp.__exit__ = lambda *a: None
+        return resp
+
+    def test_chosen_when_its_key_is_set(self):
+        eleven_tag = voice.version()
+        self.assertEqual(voice.provider(), "elevenlabs")
+        self.env["VAZHI_SARVAM_KEY"] = "sarvam-key"
+        self.assertEqual(voice.provider(), "sarvam")
+        self.assertTrue(voice.enabled())
+        # A new voice tag, so phones fetch the new clips.
+        self.assertNotEqual(voice.version(), eleven_tag)
+        self.env["VAZHI_VOICE_PROVIDER"] = "elevenlabs"
+        self.assertEqual(voice.version(), eleven_tag)
+
+    def test_the_request(self):
+        self.env["VAZHI_SARVAM_KEY"] = "sarvam-key"
+        sent = []
+
+        def urlopen(req, timeout=None):
+            sent.append(req)
+            return self.answer(fake_mp3(b"S"))
+        with mock.patch.object(voice.urllib.request, "urlopen", side_effect=urlopen):
+            data, new = voice.clip("വൈറ്റില")
+        self.assertTrue(new)
+        self.assertEqual(data, fake_mp3(b"S"))
+        import json
+        req = sent[0]
+        body = json.loads(req.data)
+        self.assertEqual(req.full_url, voice.SARVAM_API)
+        self.assertEqual(req.get_header("Api-subscription-key"), "sarvam-key")
+        self.assertEqual((body["text"], body["language_code"], body["speaker"], body["model"],
+                          body["output_audio_codec"]), ("വൈറ്റില", "ml-IN", "pooja", "bulbul:v3", "mp3"))
+
+    def test_older_api_language_field(self):
+        self.env["VAZHI_SARVAM_KEY"] = "sarvam-key"
+        bodies = []
+
+        def urlopen(req, timeout=None):
+            import json
+            bodies.append(json.loads(req.data))
+            if len(bodies) == 1:
+                raise voice.urllib.error.HTTPError(req.full_url, 422, "bad", {}, None)
+            return self.answer(fake_mp3(b"S"))
+        with mock.patch.object(voice.urllib.request, "urlopen", side_effect=urlopen):
+            voice.clip("ആലുവ")
+        self.assertEqual(bodies[1]["target_language_code"], "ml-IN")
+        self.assertNotIn("language_code", bodies[1])
+
+    def test_refused_means_the_phone_speaks(self):
+        self.env["VAZHI_SARVAM_KEY"] = "sarvam-key"
+
+        def urlopen(req, timeout=None):
+            raise voice.urllib.error.HTTPError(req.full_url, 403, "no", {}, None)
+        with mock.patch.object(voice.urllib.request, "urlopen", side_effect=urlopen):
+            with self.assertRaises(voice.VoiceError):
+                voice.clip("ആലുവ")
 
 
 if __name__ == "__main__":

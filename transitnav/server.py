@@ -400,7 +400,7 @@ class Handler(BaseHTTPRequestHandler):
     def _voice(self, params):
         """One spoken alarm line as MP3 (voice.py), stitched from saved
         pieces: fixed Malayalam phrases and the stop's name. Pieces not yet
-        saved are made by ElevenLabs. 404 when voice clips are not switched
+        saved are made by the voice service (Sarvam or ElevenLabs). 404 when voice clips are not switched
         on, so the app uses the phone's own voice."""
         def arg(key):
             return (params.get(key) or [""])[0][:120]
