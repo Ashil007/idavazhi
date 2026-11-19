@@ -1,4 +1,4 @@
-/* Vazhi - map interaction and journey rendering. */
+/* Idavazhi - map interaction and journey rendering. */
 "use strict";
 
 var MODES = {
@@ -6,19 +6,25 @@ var MODES = {
   train: { label: "Train", color: "#e8833a" },
   metro: { label: "Metro", color: "#8b5cf6" }
 };
-// Or let Vazhi compare them all, and mixes of them (a train, then a bus):
+// Or let Idavazhi compare them all, and mixes of them (a train, then a bus):
 // the quickest trip, or the one with the lowest fare.
 var PREFER = {
   fastest:  { label: "Fastest",  color: "#f6b73c" },
   cheapest: { label: "Cheapest", color: "#f6b73c" }
 };
+// Whose buses, asked once Bus is picked: KSRTC's, private ones, or either.
+var BUSES = {
+  any:     { label: "Any bus", color: "#22a06b" },
+  ksrtc:   { label: "KSRTC",   color: "#22a06b" },
+  private: { label: "Private", color: "#22a06b" }
+};
 
 // How the rider reaches and leaves the stops. Colours and dashes keep the two
 // access styles distinct from each other and from every vehicle line.
 var ACCESS = {
-  walk:        { label: "Walk",        color: "#9fb3c8", dash: "1 9", noun: "On foot" },
-  two_wheeler: { label: "Two-wheeler", color: "#4fc3d9", dash: "8 8", noun: "By two-wheeler" },
-  cab:         { label: "Cab",         color: "#e7d36b", dash: "10 6", noun: "By cab" }
+  walk:        { label: "Walk",        color: "#7b8ca1", dash: "1 9", noun: "On foot" },
+  two_wheeler: { label: "Two-wheeler", color: "#1fa5bd", dash: "8 8", noun: "By two-wheeler" },
+  cab:         { label: "Cab",         color: "#b8901a", dash: "10 6", noun: "By cab" }
 };
 
 var ICONS = {
@@ -35,6 +41,7 @@ var ICONS = {
 var state = {
   mode: "fastest",     // Fastest, Cheapest, or one of MODES; the rider can change it
   access: "walk",
+  bus: "any",          // with Bus: "ksrtc", "private" or "any"
   origin: null,
   destination: null,
   active: "origin",
@@ -136,11 +143,37 @@ function setActive(role) {
     (role === "origin" ? "start point." : "destination.");
 }
 
+// A trip on screen, or one being planned.
+function hasTrip() { return state.planning || !el("result-block").hidden; }
+
 map.on("click", function (e) {
   if (STOPS.onMapClick(e.latlng)) return;     // placing a missing bus stop
+  // With a trip planned, a stray tap must not move the destination: a note
+  // there offers to clear the trip and drop the new pin instead.
+  if (hasTrip()) { offerNewPin(e.latlng); return; }
   setPoint(state.active, e.latlng);
   SHEET.showForm();   // phones: the sheet rises so "Plan journey" is in view
 });
+
+function offerNewPin(latlng) {
+  var box = document.createElement("div");
+  box.className = "newpin";
+  box.innerHTML = "<p>To drop a new pin, clear this trip first.</p>" +
+    '<button type="button" class="newpin__go">Clear trip and drop it here</button>';
+  var pop = L.popup({ className: "newpin-pop", minWidth: 200, autoPanPadding: [16, 16] })
+    .setLatLng(latlng).setContent(box).openOn(map);
+  box.querySelector("button").addEventListener("click", function (e) {
+    e.stopPropagation();
+    map.closePopup(pop);
+    if (ALERTS.isRunning() &&
+        !window.confirm("Your stop alarm is on. Clear this trip and stop the alarm?")) return;
+    dropTrip();
+    setPoint("destination", latlng);
+    setActive("destination");
+    document.querySelector(".panel").scrollTop = 0;
+    SHEET.showForm();
+  });
+}
 
 /* ---------------------------------------------------------------- modes */
 
@@ -153,8 +186,48 @@ function choose(key, id) {
   document.querySelectorAll('.mode[data-key="' + key + '"]').forEach(function (b) {
     b.setAttribute("aria-pressed", String(b.getAttribute("data-id") === id));
   });
-  if (key === "mode") { prefetch(state.origin); prefetch(state.destination); }
-  if (changed && !el("result-block").hidden && state.origin && state.destination) planJourney();
+  if (key === "mode") {
+    prefetch(state.origin); prefetch(state.destination);
+    el("mapbus").hidden = id !== "bus";
+  }
+  if (changed && state.planning) state.replan = true;   // plan again once this one is in
+  else if (changed && !el("result-block").hidden && state.origin && state.destination) planJourney();
+}
+
+// Once something is picked, its row folds to that one choice, so the map
+// stays clear; tapping the choice opens the row again.
+var FOLDS = { mode: ["mapprefer", "mapmodes"], access: ["mapaccess"], bus: ["mapbus"] };
+function isFolded(key) { return el(FOLDS[key][0]).classList.contains("is-folded"); }
+function fold(key, on) {
+  FOLDS[key].forEach(function (id) {
+    var wrap = el(id);
+    wrap.classList.toggle("is-folded", on);
+    wrap.classList.toggle("is-empty", on && !wrap.querySelector('.mode[aria-pressed="true"]'));
+    wrap.querySelectorAll(".mode").forEach(function (b) {
+      var picked = on && b.getAttribute("aria-pressed") === "true";
+      if (picked) {
+        b.setAttribute("aria-expanded", "false");
+        b.title = "Change";
+      } else {
+        b.removeAttribute("aria-expanded");
+        b.removeAttribute("title");
+      }
+    });
+  });
+}
+
+// Every row folded to its choice: at start, when a trip is planned, and
+// after a saved or shared trip sets the choices without a tap.
+function foldAll() {
+  el("mapbus").hidden = state.mode !== "bus";
+  Object.keys(FOLDS).forEach(function (key) { fold(key, true); });
+}
+
+// Pick a choice from code (a shared link, a pop-up's "Use a two-wheeler"):
+// unlike a tap on a folded row, it never opens the row.
+function pick(key, id) {
+  choose(key, id);
+  fold(key, true);
 }
 
 // One row of toggle buttons for state[key].
@@ -165,11 +238,15 @@ function buildToggle(wrapId, options, key) {
     b.className = "mode";
     b.type = "button";
     b.style.setProperty("--mode-color", options[id].color);
-    b.innerHTML = ICONS[id] + "<span>" + options[id].label + "</span>";
+    b.innerHTML = (ICONS[id] || "") + "<span>" + options[id].label + "</span>";
     b.setAttribute("aria-pressed", String(id === state[key]));
     b.setAttribute("data-id", id);
     b.setAttribute("data-key", key);
-    b.addEventListener("click", function () { choose(key, id); });
+    b.addEventListener("click", function () {
+      if (isFolded(key) && id === state[key]) { fold(key, false); return; }
+      choose(key, id);
+      fold(key, true);
+    });
     wrap.appendChild(b);
   });
 }
@@ -189,9 +266,15 @@ function buildModes() {
   // Both choices sit at the top right of the map.
   buildToggle("mapprefer", PREFER, "mode");
   buildToggle("mapmodes", MODES, "mode");
+  buildToggle("mapbus", BUSES, "bus");
+  el("mapbus").hidden = state.mode !== "bus";
   // Walk or two-wheeler before planning; an Uber is offered on the planned
   // trip itself, once the rider can see how far the stop is.
   buildToggle("mapaccess", { walk: ACCESS.walk, two_wheeler: ACCESS.two_wheeler }, "access");
+  // Walk is already picked, so its row starts folded. Bus / Train / Metro
+  // stay open until the rider picks one, so a first visit sees them all.
+  fold("access", true);
+  fold("bus", true);
 }
 
 document.querySelectorAll(".point").forEach(function (row) {
@@ -258,12 +341,12 @@ function placeSearch(role, input, list) {
            '">' + (star ? "\u2605" : "\u2606") + "</button></div></li>";
   }
   // Under every search: add the place if the map lacks it, or look it up.
-  // (Google's places are never copied into Vazhi - its terms forbid that -
+  // (Google's places are never copied into Idavazhi - its terms forbid that -
   // the link only opens Google Maps for the rider.)
   function extras(q) {
     return '<li class="s-foot"><span class="s-foot__q">Not listed?</span>' +
       '<button type="button" data-act="add" title="Tap where it is on the map; then everyone can find it">' +
-      '+ Add it to Vazhi</button>' +
+      '+ Add it to Idavazhi</button>' +
       '<a data-act="look" href="https://www.google.com/maps/search/?api=1&amp;query=' +
       encodeURIComponent(q + ", Kerala") + '" target="_blank" rel="noopener">Google Maps ↗</a></li>';
   }
@@ -325,7 +408,7 @@ function placeSearch(role, input, list) {
         if (ticket !== asked) return;
         show([], navigator.onLine === false
           ? "You are offline - connect to the internet to search."
-          : "Can't reach Vazhi right now, so search isn't working. Try again in a minute.");
+          : "Can't reach Idavazhi right now, so search isn't working. Try again in a minute.");
         serverDown(true);
       });
   }
@@ -378,19 +461,21 @@ function tripLink() {
   }
   var q = new URLSearchParams({ from: end(state.origin, "origin-input"), to: end(state.destination, "dest-input"),
                                 mode: state.mode, access: state.access });
+  if (state.mode === "bus" && state.bus !== "any") q.set("bus", state.bus);
   return window.location.origin + window.location.pathname + "?" + q.toString();
 }
 
 el("share").addEventListener("click", function () {
   if (!state.origin || !state.destination || !state.mode) return;
   var url = tripLink();
-  var text = "My trip on Vazhi: " + (el("dest-input").value || "destination");
+  var text = "My trip on Idavazhi: " + (el("dest-input").value || "destination");
   var btn = el("share");
-  function said(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = "Share this trip"; }, 2500); }
+  var label = btn.querySelector("span") || btn;
+  function said(msg) { label.textContent = msg; setTimeout(function () { label.textContent = "Share"; }, 2500); }
   if (navigator.share) {
-    navigator.share({ title: "Vazhi trip", text: text, url: url }).catch(function () { /* cancelled */ });
+    navigator.share({ title: "Idavazhi trip", text: text, url: url }).catch(function () { /* cancelled */ });
   } else if (navigator.clipboard) {
-    navigator.clipboard.writeText(url).then(function () { said("Link copied - paste it in WhatsApp"); },
+    navigator.clipboard.writeText(url).then(function () { said("Link copied"); },
                                             function () { window.prompt("Copy this link:", url); });
   } else {
     window.prompt("Copy this link:", url);
@@ -408,13 +493,10 @@ function openSharedTrip() {
   }
   var a = point(q.get("from")), b = point(q.get("to"));
   if (!a || !b) return false;
-  ["mode", "access"].forEach(function (key) {
-    var btn = document.querySelector((key === "mode" ? "#mapprefer, #mapmodes" : "#mapaccess")
-                                      .split(", ").map(function (w) {
-                                        return w + ' [data-id="' + (q.get(key) || "") + '"]';
-                                      }).join(", "));
-    if (btn) btn.click();
-  });
+  var mode = q.get("mode") || "";
+  if (MODES[mode] || PREFER[mode]) pick("mode", mode);
+  if (ACCESS[q.get("access")] && q.get("access") !== "cab") pick("access", q.get("access"));
+  if (BUSES[q.get("bus")]) pick("bus", q.get("bus"));
   setPoint("origin", a.at, a.name);
   setPoint("destination", b.at, b.name);
   if (state.mode) planJourney();
@@ -484,6 +566,7 @@ function planJourney(access) {
   }
 
   state.planning = true;
+  foldAll();                     // the rows fold away so the map shows the trip
   document.querySelector(".panel").classList.remove("has-result");
   DRAWER.close();                // phones: the old trip's drawer goes while planning
   SHEET.set("half");             // phones: show the progress, keep some map
@@ -492,12 +575,29 @@ function planJourney(access) {
   el("result-block").hidden = true;
   routeLayer.clearLayers();
   resetStatus();
+  // Say something at once: the first word from the server can take a moment.
+  var now = el("status-now");
+  now.textContent = STAGE_TEXT.start;
+  now.className = "now is-live";
+  // If nothing new arrives for a while, say it is still going rather than
+  // leave a line that looks frozen.
+  var quiet = null;
+  function stillHere() {
+    clearTimeout(quiet);
+    quiet = setTimeout(function () {
+      if (settled) return;
+      now.textContent = "Still working — a map service is slow right now. This can take up to a minute.";
+      now.className = "now is-live";
+    }, 10000);
+  }
+  stillHere();
 
   var params = new URLSearchParams({
     olat: state.origin.lat, olon: state.origin.lon,
     dlat: state.destination.lat, dlon: state.destination.lon,
     mode: state.mode,
-    access: access
+    access: access,
+    bus: state.mode === "bus" ? state.bus : "any"
   });
 
   var source = new EventSource("/api/plan?" + params.toString());
@@ -507,11 +607,14 @@ function planJourney(access) {
   source.addEventListener("progress", function (ev) {
     var d = JSON.parse(ev.data);
     pushStatus(d.message, undefined, d.stage);
+    stillHere();
   });
 
   source.addEventListener("result", function (ev) {
     if (settled) return;
+    var stale = state.replan;   // the rider changed a choice: the next plan is the answer
     finish();
+    if (stale) return;
     pushStatus("Done.", "");
     // Phones: the sheet drops to its lowest (the map is fitted above it) and
     // the trip slides in from the left (drawer.js).
@@ -532,7 +635,9 @@ function planJourney(access) {
     if (settled) return;
     var info = null;
     try { info = JSON.parse(ev.data); } catch (e) { /* transport-level */ }
+    var stale = state.replan;   // the rider changed a choice: the next plan is the answer
     finish();
+    if (stale) return;
     if (info && info.error) {
       pushStatus(info.error, "is-error");
       NOTICE.show({
@@ -542,10 +647,10 @@ function planJourney(access) {
         actions: (info.actions || []).map(toAction)
       });
     } else {
-      pushStatus("Lost contact with Vazhi's server.", "is-error");
+      pushStatus("Lost contact with Idavazhi's server.", "is-error");
       NOTICE.show({
         tone: "error", title: "No connection",
-        text: "Vazhi could not reach its server. Check your internet, then try again.",
+        text: "Idavazhi could not reach its server. Check your internet, then try again.",
         actions: [{ label: "Try again", run: planJourney }]
       });
     }
@@ -553,10 +658,14 @@ function planJourney(access) {
 
   function finish() {
     settled = true;
+    clearTimeout(quiet);
     state.planning = false;
     el("plan").disabled = false;
     el("plan").textContent = "Plan journey";
     source.close();
+    // The rider changed Bus/Train, KSRTC/private or walk/two-wheeler while
+    // this was planning: plan again for what is chosen now.
+    if (state.replan) { state.replan = false; setTimeout(planJourney, 0); }
   }
 }
 
@@ -567,11 +676,11 @@ function toAction(a) {
   return {
     label: a.label,
     run: function () {
-      if (a.mode) { var m = document.querySelector('#mapprefer [data-id="' + a.mode + '"], #mapmodes [data-id="' + a.mode + '"]'); if (m) m.click(); }
+      if (a.mode && (MODES[a.mode] || PREFER[a.mode])) pick("mode", a.mode);
       // An Uber is for this trip only: the plan shows the cab ride to the
       // stop with its "Book a ride" button. Walk / Two-wheeler stays as it was.
       if (a.access === "cab") { planJourney("cab"); return; }
-      if (a.access) { var x = document.querySelector('#mapaccess [data-id="' + a.access + '"]'); if (x) x.click(); }
+      if (a.access && ACCESS[a.access]) pick("access", a.access);
       planJourney();
     }
   };
@@ -607,6 +716,7 @@ el("trip-head-edit").addEventListener("click", function () {
 function dropTrip() {
   if (state.source) state.source.close();
   state.planning = false;
+  state.replan = false;
   state.options = null;
   ALERTS.stop();
   el("trip").hidden = true;
@@ -626,6 +736,23 @@ el("clear").addEventListener("click", function () {
   el("origin-input").value = el("dest-input").value = "";
   drawPoints();
   setActive("origin");
+});
+
+// The arrows between the two boxes: going back the way you came.
+el("swap").addEventListener("click", function (e) {
+  e.stopPropagation();
+  var a = state.origin, b = state.destination;
+  if (!a && !b) return;
+  if (ALERTS.isRunning() &&
+      !window.confirm("Your stop alarm is on. Swap start and destination and stop the alarm?")) return;
+  var an = el("origin-input").value, bn = el("dest-input").value;
+  dropTrip();
+  state.origin = b ? { lat: b.lat, lon: b.lon } : null;
+  state.destination = a ? { lat: a.lat, lon: a.lon } : null;
+  el("origin-input").value = b ? bn : "";
+  el("dest-input").value = a ? an : "";
+  drawPoints();
+  setActive(state.origin ? "destination" : "origin");
 });
 
 // The cross by the destination: picked the wrong place? Remove it and
@@ -659,6 +786,7 @@ function fmtMin(s) {
 // cards to switch to.
 function showOptions(plan) {
   state.options = [plan].concat(plan.alternatives || []);
+  state.routePicked = false;               // a new plan shows every route again
   selectOption(0, true);
 }
 
@@ -682,44 +810,93 @@ function renderOptions(plan) {
       '</span><span class="option__time">' +
       escapeHtml(o.summary.duration_text) + '</span><span class="option__dist">' +
       (compared && o.option_detail ? escapeHtml(o.option_detail) + " &middot; " : "") +
+      (o.summary.changes ? o.summary.changes + (o.summary.changes > 1 ? " changes" : " change") + " &middot; " : "") +
       escapeHtml(o.summary.distance_text) + (fare ? " &middot; " + escapeHtml(fare) : "") +
-      "</span></button>";
+      '</span><span class="option__go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>' +
+      "</button>";
   }).join("");
   box.hidden = false;
   Array.prototype.forEach.call(box.querySelectorAll("[data-option]"), function (b) {
     b.addEventListener("click", function () { selectOption(Number(b.getAttribute("data-option")), false); });
   });
+  Array.prototype.forEach.call(box.querySelectorAll(".option__go"), function (g) {
+    g.addEventListener("click", function (e) {
+      e.stopPropagation();
+      continueWith(Number(g.parentNode.getAttribute("data-option")));
+    });
+  });
+  // Picked: only the chosen route shows, with a way back to all of them.
+  box.classList.toggle("is-picked", !!state.routePicked);
+  if (state.routePicked) {
+    var more = document.createElement("button");
+    more.type = "button";
+    more.className = "options__more";
+    more.textContent = "Show all routes";
+    more.addEventListener("click", function () {
+      state.routePicked = false;
+      renderOptions(state.options[state.selected]);
+    });
+    box.appendChild(more);
+  }
 }
 
-// Opens the Uber app (or m.uber.com without it) with the stop as the
-// destination; Uber takes the pickup from the phone's location.
-function uberLink(plan, leg) {
+// The arrow on a route: choose it, hide the others, and go to the alarm.
+function continueWith(i) {
+  state.routePicked = true;
+  selectOption(i, false);
+  var trip = el("trip");
+  if (trip && !trip.hidden) trip.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+// Where a stretch of the trip starts and ends, as Uber places: its own line's
+// first and last points, named after the station or stop next to it, or the
+// rider's own start or destination.
+function legEnds(plan, leg) {
   var i = plan.legs.indexOf(leg);
-  var next = plan.legs.slice(i + 1).filter(function (l) { return l.type === "transit"; })[0];
-  var end = leg.geometry && leg.geometry.length ? leg.geometry[leg.geometry.length - 1] : null;
-  var stop = next && next.from && next.from.lat != null
-    ? { lat: next.from.lat, lon: next.from.lon, name: next.from.name }
-    : end ? { lat: end[0], lon: end[1], name: leg.label.replace(/^(Cab|Walk|Ride|Bus or auto-rickshaw|Bus or taxi) to /, "") } : null;
-  if (!stop) return null;
-  // Uber's current link (developer.uber.com, "Introduction to Deep Links"):
-  // the destination as a JSON place in drop[0]. The older /ul/?dropoff[...]
-  // link opens the app but leaves "Where to?" empty. No pickup is given, so
-  // Uber picks the rider up where the phone is.
-  var drop = { latitude: Number(Number(stop.lat).toFixed(6)),
-               longitude: Number(Number(stop.lon).toFixed(6)),
-               addressLine1: stop.name || "Bus stop",
-               addressLine2: "Kerala" };
-  return "https://m.uber.com/looking?drop%5B0%5D=" + encodeURIComponent(JSON.stringify(drop));
+  var geo = leg.geometry || [];
+  if (geo.length < 2) return null;
+  var before = plan.legs.slice(0, i).filter(function (l) { return l.type === "transit"; }).pop();
+  var after = plan.legs.slice(i + 1).filter(function (l) { return l.type === "transit"; })[0];
+  function typed(box, fallback) {
+    var v = (el(box).value || "").trim();
+    return v && !/^(Point on the map|Your location)/.test(v) ? v : fallback;
+  }
+  var a = geo[0], b = geo[geo.length - 1];
+  return {
+    pickup: { lat: a[0], lon: a[1],
+              name: (before && before.to && before.to.name) ||
+                    (i === 0 ? typed("origin-input", "Your start") : "Pickup") },
+    drop:   { lat: b[0], lon: b[1],
+              name: (after && after.from && after.from.name) ||
+                    (!after ? typed("dest-input", "Your destination") : "Drop-off") }
+  };
 }
 
-// The first stretch of a trip (the walk or ride to the first stop) gets an
-// Uber button, so the rider can decide after seeing the plan. Not for a
-// stop a few steps away.
+// Opens the Uber app (or m.uber.com without it) for this stretch, with its
+// start as the pickup and its end as where to. Uber's current link
+// (developer.uber.com, "Introduction to Deep Links"): each place as JSON in
+// `pickup` and `drop[0]`. The older /ul/?dropoff[...] link opens the app but
+// leaves "Where to?" empty.
+function uberLink(plan, leg) {
+  var ends = legEnds(plan, leg);
+  if (!ends) return null;
+  function place(p) {
+    return JSON.stringify({ latitude: Number(Number(p.lat).toFixed(6)),
+                            longitude: Number(Number(p.lon).toFixed(6)),
+                            addressLine1: p.name, addressLine2: "Kerala" });
+  }
+  return "https://m.uber.com/looking?pickup=" + encodeURIComponent(place(ends.pickup)) +
+         "&drop%5B0%5D=" + encodeURIComponent(place(ends.drop));
+}
+
+// Which stretches get an Uber button: every auto-rickshaw, taxi or cab ride,
+// wherever it is in the trip, and a long walk or ride to the first stop (so
+// the rider can decide after seeing the plan). Not for a few steps.
 var UBER_MIN_M = 300;
 function offersUber(plan, leg) {
-  var i = plan.legs.indexOf(leg);
-  if (i !== 0 || leg.type === "transit" || leg.type === "wait") return false;
-  if (leg.distance_m < UBER_MIN_M) return false;
+  if (leg.type === "transit" || leg.type === "wait") return false;
+  if (leg.access === "road" || leg.access === "cab") return true;
+  if (plan.legs.indexOf(leg) !== 0 || leg.distance_m < UBER_MIN_M) return false;
   return plan.legs.some(function (l) { return l.type === "transit"; });
 }
 
@@ -728,15 +905,14 @@ function uberButton(plan, leg) {
   wrap.className = "cab-book";
   var href = uberLink(plan, leg);
   if (!href) return wrap;
-  var next = plan.legs.filter(function (l) { return l.type === "transit"; })[0];
-  var stop = next && next.from && next.from.name;
-  if (leg.access !== "cab") {
-    // Rough car time for the same distance, so the choice is an informed one.
+  var ends = legEnds(plan, leg);
+  var auto = leg.access === "road";
+  if (leg.access !== "cab" && !auto) {
+    // A walk or own ride: a rough car time for it, so the choice is informed.
     var mins = Math.max(3, Math.round(leg.distance_m / 1000 / 22 * 60));
     var head = document.createElement("p");
     head.className = "cab-book__head";
-    head.textContent = "Or take an Uber " + (stop ? "to " + stop + " " : "") +
-                       "— about " + mins + " min by car";
+    head.textContent = "Or take an Uber to " + ends.drop.name + " — about " + mins + " min by car";
     wrap.appendChild(head);
   }
   var a = document.createElement("a");
@@ -744,18 +920,22 @@ function uberButton(plan, leg) {
   a.href = href;
   a.target = "_blank";
   a.rel = "noopener";
-  a.innerHTML = '<span class="cab-book__brand">Uber</span><span>Book a ride to ' +
-                escapeHtml(stop || "this stop") + "</span>";
+  a.innerHTML = '<span class="cab-book__brand">Uber</span><span>' +
+                escapeHtml(ends.pickup.name) + " &rarr; " + escapeHtml(ends.drop.name) + "</span>";
   var note = document.createElement("p");
   note.className = "cab-book__note";
-  note.textContent = "Opens Uber with your current location as the pickup and this stop as where to. " +
-                     "Check the fare there before you book.";
+  note.textContent = "Opens Uber with " + ends.pickup.name + " as the pickup and " + ends.drop.name +
+                     " as where to." + (auto ? " Choose Auto or a car there." : "") +
+                     " Check the fare in Uber before you book.";
   wrap.appendChild(a);
   wrap.appendChild(note);
   return wrap;
 }
 
 // A trip may mix modes (a train, then a bus): each ride in its own colour.
+// The border of a bus's green line on the map, by whose bus it is.
+var BUS_BORDER = { ksrtc: "#ffffff", "private": "#2f7df6" };
+
 function legColor(plan, leg) {
   return (leg && leg.mode && MODES[leg.mode]) ? MODES[leg.mode].color : plan.color;
 }
@@ -776,6 +956,52 @@ function fareByType(fare) {
   return det;
 }
 
+// "Wrong fare?" under a ride with a fare: the rider says what they paid.
+// It goes to the maker as a message (server: feedback.fare), who checks it
+// against the official fare rules; it changes no fare by itself.
+function wrongFare(plan, leg) {
+  var box = document.createElement("div");
+  box.className = "stopfix";
+  var mode = leg.type === "transit" ? leg.mode : "road";
+  function place(s, fallback) { return (s && s.name) || fallback; }
+  function link() {
+    box.innerHTML = '<button type="button">Wrong fare?</button>';
+    box.querySelector("button").addEventListener("click", form);
+  }
+  function form() {
+    var types = (leg.fare.types || []).map(function (t) { return t.name; });
+    box.innerHTML = '<form class="stopfix__form"><label>Idavazhi showed about <b>' + escapeHtml(leg.fare.text) +
+      "</b>. What did you pay?" +
+      '<input name="paid" type="number" inputmode="decimal" min="1" max="10000" step="any" required placeholder="Rupees" /></label>' +
+      (types.length ? '<label>Which bus?<select name="kind"><option value="">Not sure</option>' +
+        types.map(function (t) { return "<option>" + escapeHtml(t) + "</option>"; }).join("") +
+        "</select></label>" : "") +
+      '<label>Anything else? <span>(optional)</span><input name="note" maxlength="300" /></label>' +
+      '<div class="stopfix__btns"><button type="submit">Send</button><button type="button" class="ghostlink">Cancel</button></div>' +
+      '<p class="stopfix__msg" role="status"></p></form>';
+    var f = box.querySelector("form");
+    f.elements.paid.focus();
+    f.querySelector(".ghostlink").addEventListener("click", link);
+    f.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = f.querySelector(".stopfix__msg");
+      msg.textContent = "Sending…";
+      OUTBOX.post("/api/fares/wrong", {
+        mode: mode, paid: f.elements.paid.value, kind: f.elements.kind ? f.elements.kind.value : "",
+        note: f.elements.note.value, shown: leg.fare.text, km: (leg.distance_m / 1000).toFixed(1),
+        from: place(leg.from, leg.type === "transit" ? "" : "start"),
+        to: place(leg.to, leg.label)
+      }).then(function (j) {
+        box.textContent = (j.queued ? "No internet right now - it's saved and will be sent when you're back online. "
+                                    : "Thanks! ") +
+          "Idavazhi's fares follow the published fare rules; reports like yours are checked against them and the fare is corrected if it is wrong.";
+      }).catch(function (err) { msg.textContent = err.message; });
+    });
+  }
+  link();
+  return box;
+}
+
 function renderPlan(plan, fit) {
   var color = plan.color;
   var access = ACCESS[plan.access] || ACCESS.walk;
@@ -783,8 +1009,9 @@ function renderPlan(plan, fit) {
   /* ---- map ---- */
   routeLayer.clearLayers();
   // The other options first, underneath: faded dashes in the trip's colour
-  // on a dark edge, so they read as "another way" and not as a road, with
-  // their time on a label. Click one to switch to it.
+  // on an edge the colour of the map (style.css, .alt-edge), so they read
+  // as "another way" and not as a road, with their time on a label. Click
+  // one to switch to it.
   (state.options || []).forEach(function (opt, j) {
     if (opt === plan) return;
     var tip = escapeHtml(opt.option_label || "Another route") + " &middot; " +
@@ -792,12 +1019,18 @@ function renderPlan(plan, fit) {
     var longest = null;
     opt.legs.forEach(function (leg) {
       if (!leg.geometry || leg.geometry.length < 2) return;
-      if (!longest || leg.geometry.length > longest.length) longest = leg.geometry;
-      var edge = L.polyline(leg.geometry, { color: "#0d1117", weight: 9, opacity: 0.55,
-                                            lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
-      var dash = L.polyline(leg.geometry, { color: opt.color || color, weight: 4, opacity: 0.6,
-                                            dashArray: "10 10", lineCap: "round", lineJoin: "round",
+      // A stretch no road router could trace is only a straight line between
+      // its ends: drawn as faint dots, never as a route along roads.
+      var rough = !!leg.approximate;
+      if (!rough && (!longest || leg.geometry.length > longest.length)) longest = leg.geometry;
+      var edge = L.polyline(leg.geometry, { color: "#0d1117", weight: rough ? 5 : 9, opacity: rough ? 0.3 : 0.55,
+                                            lineCap: "round", lineJoin: "round",
+                                            className: "alt-edge" }).addTo(routeLayer);
+      var dash = L.polyline(leg.geometry, { color: opt.color || color, weight: rough ? 2 : 4,
+                                            opacity: rough ? 0.4 : 0.6,
+                                            dashArray: rough ? "1 8" : "10 10", lineCap: "round", lineJoin: "round",
                                             className: "alt-route" }).addTo(routeLayer);
+      if (rough) tip += " &middot; road not traced, straight line";
       [edge, dash].forEach(function (line) {
         line.bindTooltip(tip, { sticky: true })
           .on("click", function () { selectOption(j, false); })
@@ -818,14 +1051,25 @@ function renderPlan(plan, fit) {
     var isAccess = leg.type !== "transit";
     // Each leg in its own style: with a two-wheeler the last stretch is a walk.
     var own = ACCESS[leg.access] || access;
-    L.polyline(leg.geometry, {
+    // A bus whose operator is known gets a border on its green line: white
+    // for KSRTC, blue for a private bus.
+    var border = !isAccess && !leg.approximate && leg.mode === "bus" ? BUS_BORDER[leg.operator] : null;
+    if (border) {
+      L.polyline(leg.geometry, { color: border, weight: 11, opacity: 1,
+                                 lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+    }
+    var line = L.polyline(leg.geometry, {
       color: isAccess ? own.color : legColor(plan, leg),
-      weight: isAccess ? 4 : 6,
-      opacity: isAccess ? 0.95 : 0.9,
-      dashArray: isAccess ? own.dash : null,
+      weight: leg.approximate ? 3 : isAccess ? 4 : 6,
+      opacity: leg.approximate ? 0.6 : isAccess ? 0.95 : 0.9,
+      dashArray: leg.approximate ? "1 9" : isAccess ? own.dash : null,
       lineCap: "round",
       lineJoin: "round"
     }).addTo(routeLayer);
+    if (leg.approximate) {
+      line.bindTooltip("The road for this part could not be traced right now, so it is a straight line. " +
+                       "The real road is longer.", { sticky: true });
+    }
   });
 
   // Every train or vehicle leg: a long train trip may have two, with a
@@ -856,7 +1100,8 @@ function renderPlan(plan, fit) {
     var destColor = isLastTransit ? "#f2686b" : color;
     L.marker([transit.to.lat, transit.to.lon], { icon: stopIcon(destColor, 15), zIndexOffset: 500 })
       .addTo(routeLayer)
-      .bindTooltip("<b>" + escapeHtml(transit.to.name || "Unnamed stop") + "</b><br>" + (isLastTransit ? "Destination (Get off here)" : "Change lines here"),
+      .bindTooltip("<b>" + escapeHtml(transit.to.name || "Unnamed stop") + "</b><br>" + (isLastTransit ? "Destination (Get off here)" :
+                   transit.mode === "bus" && transitLegs[idx + 1].mode === "bus" ? "Change buses here" : "Change lines here"),
                    { direction: "top", offset: [0, -9] });
   });
 
@@ -885,10 +1130,17 @@ function renderPlan(plan, fit) {
     '<div><b>' + s.duration_text + '</b><span>Total time</span></div>' +
     '<div><b>' + s.distance_text + '</b><span>Total distance</span></div>' +
     '<div><b>' + fmtKm(s.access_m) + '</b><span>' + access.noun + '</span></div>' +
-    (s.fare ? '<div><b>' + escapeHtml(s.fare.complete || s.fare.min ? s.fare.text.split(" + ")[0]
-                                                                      : "Not priced") +
-              '</b><span>' + (s.fare.complete ? "Fare, about" : s.fare.min ? "Fare, plus the " +
-                              escapeHtml(s.fare.missing.join(" and ")) : "Fare") + '</span></div>' : "");
+    (s.fare ? (function () {
+      // "₹70–81 + Train fare": the priced part, then what is still to pay.
+      var priced = s.fare.complete || s.fare.min;
+      var head = escapeHtml(priced ? s.fare.text.split(" + ")[0] : "Not priced");
+      if (!s.fare.complete && s.fare.min && s.fare.missing.length) {
+        var what = s.fare.missing.join(" and ");
+        head += " + " + escapeHtml(what.charAt(0).toUpperCase() + what.slice(1)) + " fare";
+        return '<div><b>' + head + '</b></div>';
+      }
+      return '<div><b>' + head + '</b><span>' + (s.fare.complete ? "Fare, about" : "Fare") + '</span></div>';
+    })() : "");
 
   /* ---- itinerary ---- */
   var list = el("itinerary");
@@ -932,7 +1184,8 @@ function renderPlan(plan, fit) {
     }
     li.innerHTML = html;
     if (leg.fare && leg.fare.types) li.appendChild(fareByType(leg.fare));
-    if (leg.access === "cab" || offersUber(plan, leg)) li.appendChild(uberButton(plan, leg));
+    if (leg.fare && leg.fare.text) li.appendChild(wrongFare(plan, leg));
+    if (offersUber(plan, leg)) li.appendChild(uberButton(plan, leg));
     if (leg.type === "transit" && leg.train) LIVETRAIN.legButton(li, leg);   // where is it now?
     // Bus rides: the times riders have added for this stop and direction.
     if (leg.mode === "bus" && leg.type === "transit" && leg.from && leg.to) {
@@ -971,6 +1224,11 @@ function renderPlan(plan, fit) {
         return '<div><i style="background:' + legColor(plan, { mode: m }) + '"></i> ' +
                escapeHtml(MODES[m] ? MODES[m].label : plan.mode_label) + " line</div>";
       }).join("") +
+    ["ksrtc", "private"].filter(function (op) {
+      return transitLegs.some(function (l) { return l.mode === "bus" && l.operator === op; });
+    }).map(function (op) {
+      return '<div><i class="legend__' + op + '"></i> ' + (op === "ksrtc" ? "KSRTC bus" : "Private bus") + "</div>";
+    }).join("") +
     ((state.options || []).length > 1
       ? '<div><i class="legend__alt" style="color:' + color + '"></i> Other route</div>' : "");
   legend.hidden = false;
@@ -1019,13 +1277,13 @@ function pollOffline() {
 }
 pollOffline();
 
-// Opened from the phone's saved copy while Vazhi's server is unreachable:
+// Opened from the phone's saved copy while Idavazhi's server is unreachable:
 // say so plainly at the top, instead of letting each search fail on its own.
 function serverDown(down) {
   var note = el("offline-note");
   if (navigator.onLine === false) return;      // install.js shows "You are offline"
   if (down) {
-    note.textContent = "Can't reach Vazhi right now. Searching and planning will work again " +
+    note.textContent = "Can't reach Idavazhi right now. Searching and planning will work again " +
                        "once it is back - a trip alarm that is already on keeps working.";
     note.hidden = false;
   } else if (note.getAttribute("data-down") === "1") {
@@ -1117,7 +1375,7 @@ function showDistrict(why) {
         .addTo(whereLayer);
       setWhere("Showing <b>" + escapeHtml(label) + "</b>, worked out from your internet " +
                "connection because " + escapeHtml(why) + ". Click the map to set your start, " +
-               "or allow location access and press Locate.");
+               "or allow location access and tap the location button by Start.");
     })
     .catch(function () {
       setWhere("Could not tell where you are (" + escapeHtml(why) + "). Click the map, or " +

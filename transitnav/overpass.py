@@ -109,7 +109,7 @@ def probe_mirrors(timeout: float = 8.0) -> dict:
     return results
 
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "vazhi/1.0 (local journey planner; stdlib urllib)"
+USER_AGENT = "idavazhi/1.0 (local journey planner; stdlib urllib)"
 
 CACHE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".cache", "overpass"
@@ -542,9 +542,10 @@ def _tile_of(lat: float, lon: float, deg: float):
 
 def split_by_tile(data: dict, deg: float, kind: str) -> dict:
     """Cut one response into {tile: [elements]}. `kind` is "stops" (each
-    element sits in the tile holding its point) or "network" (each way goes
+    element sits in the tile holding its point), "network" (each way goes
     to every tile it has a node in, with all of its nodes, as a tile query
-    would return it)."""
+    would return it) or "routes" (a network, and each route relation goes to
+    every tile one of its roads does)."""
     out: dict = {}
     elements = data.get("elements", ())
     if kind == "stops":
@@ -555,16 +556,28 @@ def split_by_tile(data: dict, deg: float, kind: str) -> dict:
         return out
     nodes = {el["id"]: el for el in elements if el.get("type") == "node"}
     tile_nodes: dict = {}
+    way_tiles: dict = {}
     for el in elements:
         if el.get("type") != "way":
             continue
         refs = [nodes[r] for r in el.get("nodes", ()) if r in nodes]
-        for tile in {_tile_of(n["lat"], n["lon"], deg) for n in refs}:
+        tiles = way_tiles[el["id"]] = {_tile_of(n["lat"], n["lon"], deg) for n in refs}
+        for tile in tiles:
             out.setdefault(tile, []).append(el)
             bucket = tile_nodes.setdefault(tile, {})
             for n in refs:
                 bucket[n["id"]] = n
-    return {t: list(tile_nodes[t].values()) + ways for t, ways in out.items()}
+    parts = {t: list(tile_nodes[t].values()) + ways for t, ways in out.items()}
+    if kind == "routes":
+        for el in elements:
+            if el.get("type") == "relation":
+                tiles = set()
+                for m in el.get("members", ()):
+                    if m.get("type") == "way":
+                        tiles |= way_tiles.get(m["ref"], set())
+                for tile in tiles:
+                    parts[tile].append(el)
+    return parts
 
 
 def preload_tiles(tiles, deg: float, build, build_big, kind: str, progress=None,

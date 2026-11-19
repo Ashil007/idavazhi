@@ -1,4 +1,4 @@
-/* Vazhi website: light and dark mode.
+/* Idavazhi website: light and dark mode.
  *
  * Loaded in <head>, before the page is drawn, so the right colours are there
  * from the first frame. The visitor's own choice (the sun/moon button in the

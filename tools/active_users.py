@@ -1,4 +1,4 @@
-"""Check active users and system status on the running Vazhi server.
+"""Check active users and system status on the running Idavazhi server.
 
 Usage:
     python tools/active_users.py [--port 8001]
@@ -17,11 +17,11 @@ import urllib.request
 def check_status(base_url: str):
     url = base_url.rstrip("/") + "/api/status"
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Vazhi-Admin/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Idavazhi-Admin/1.0"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.URLError as e:
-        print(f"[-] Could not connect to Vazhi server at {url}: {e}")
+        print(f"[-] Could not connect to Idavazhi server at {url}: {e}")
         print("    Make sure the server is running (e.g. 'python serve.py --port 8001')")
         return 1
 
@@ -30,7 +30,7 @@ def check_status(base_url: str):
     preload = data.get("preload", {})
 
     print("=" * 55)
-    print(" VAZHI (TRANSITNAV) - LIVE USER & SYSTEM STATUS")
+    print(" IDAVAZHI (TRANSITNAV) - LIVE USER & SYSTEM STATUS")
     print("=" * 55)
     print(f" Target Server      : {base_url}")
     print(f" Active Users (5m)  : {active_5m} unique visitor(s)")
@@ -46,13 +46,13 @@ def check_status(base_url: str):
     print(f" Data Preload State : {stage.capitalize()} ({region})")
     print(f" Station Cache      : {done}/{total} files cached ({pct})")
     print("=" * 55)
-    print("Note: Vazhi is privacy-first (no accounts or tracking cookies).")
+    print("Note: Idavazhi is privacy-first (no accounts or tracking cookies).")
     print("Active users are measured from rolling in-memory request windows.")
     return 0
 
 
 def main():
-    parser = argparse.ArgumentParser(description="View active Vazhi users and server status")
+    parser = argparse.ArgumentParser(description="View active Idavazhi users and server status")
     parser.add_argument("--port", type=int, default=8001, help="Server port (default: 8001)")
     parser.add_argument("--host", default="127.0.0.1", help="Server host (default: 127.0.0.1)")
     parser.add_argument("--url", default=None, help="Full server URL (e.g. http://127.0.0.1:8001)")

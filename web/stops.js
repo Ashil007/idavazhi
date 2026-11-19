@@ -2,6 +2,11 @@
  *
  * - Under a bus ride: "Wrong stop name?" lets a rider give a stop's real name.
  * - "Add a missing bus stop": tap the map where buses stop and name it.
+ * - "No bus runs here?": a rider says the map has a stop where no bus runs.
+ *   Once 10 riders say so, Idavazhi stops boarding or leaving buses there.
+ * - "Which buses stop here?": private, KSRTC or both, and up to where each
+ *   kind goes. Used once 5 riders agree; a place shows under the ride once
+ *   2 riders name it ("Unnichira: private buses go up to Kaloor").
  * - When a rider's trip uses a stop that others have renamed, or passes near
  *   a stop riders added, a small card asks them about it. A name is used for
  *   everyone once 30 riders back it (and more than back any other name). */
@@ -82,6 +87,188 @@ var STOPS = (function () {
             "Riders who use this stop will be asked what it is called. " +
             "Everyone sees <b>" + esc(name) + "</b> once " + NEEDED + " riders agree.";
         }).catch(function (err) { msg.textContent = err.message; });
+      });
+    }
+    ridersSay(li, stops);
+    links();
+    li.appendChild(box);
+    noBus(li, stops);
+    busKinds(li, stops);
+  }
+
+  /* ------------------------------------------ which buses stop here? */
+
+  var KIND_SAYS = { private: "only private buses stop here", ksrtc: "only KSRTC buses stop here",
+                    both: "private and KSRTC buses stop here" };
+  var KIND_ASK = [["private", "Private only"], ["ksrtc", "KSRTC only"], ["both", "Both"]];
+  var KIND_SHORT = { private: "private", ksrtc: "KSRTC", both: "both" };
+  var FAST_ASK = [["yes", "Yes"], ["no", "No"], ["", "Not sure"]];
+
+  // What riders agree on about the ride's stops: whose buses stop there
+  // and up to where each kind goes.
+  function ridersSay(li, stops) {
+    var lines = [];
+    stops.forEach(function (s) {
+      var parts = [];
+      if (s.buses && KIND_SAYS[s.buses]) parts.push(KIND_SAYS[s.buses]);
+      if (s.private_to && s.private_to.length) parts.push("private buses go up to " + s.private_to.join(", "));
+      if (s.ksrtc_to && s.ksrtc_to.length) parts.push("KSRTC buses go up to " + s.ksrtc_to.join(", "));
+      if (s.fast === "yes") parts.push("fast buses stop here");
+      if (s.fast === "no") parts.push("fast buses don't stop here");
+      if (parts.length) lines.push("<b>" + esc(s.name || "This stop") + "</b>: " + esc(parts.join("; ")));
+    });
+    if (!lines.length) return;
+    var box = document.createElement("div");
+    box.className = "busesay";
+    box.innerHTML = lines.join("<br>") + " <span>(riders say)</span>";
+    li.appendChild(box);
+  }
+
+  // Stops this browser has said which buses use: { key: kind }.
+  function saidBuses() {
+    try { return JSON.parse(localStorage.getItem("vazhi.busKinds") || "{}"); } catch (e) { return {}; }
+  }
+  function rememberBuses(key, kind) {
+    try {
+      var all = saidBuses();
+      if (kind) all[key] = kind; else delete all[key];
+      localStorage.setItem("vazhi.busKinds", JSON.stringify(all));
+    } catch (e) { /* only the label is lost */ }
+  }
+
+  function busKinds(li, stops) {
+    var box = document.createElement("div");
+    box.className = "stopfix";
+    function links() {
+      var said = saidBuses();
+      box.innerHTML = "Which buses stop here? " + stops.map(function (s, i) {
+        return '<button type="button" data-i="' + i + '">' + esc(s.name || "unnamed stop") +
+               (said[s.id] ? " (you said " + KIND_SHORT[said[s.id]] + ")" : "") + "</button>";
+      }).join(" &middot; ");
+      Array.prototype.forEach.call(box.querySelectorAll("button"), function (b) {
+        b.addEventListener("click", function () { form(stops[Number(b.getAttribute("data-i"))]); });
+      });
+    }
+    function form(stop) {
+      var said = saidBuses()[stop.id];
+      box.innerHTML = '<form class="stopfix__form busform"><fieldset><legend>Which buses stop at <b>' +
+        esc(stop.name || "this stop") + "</b>?</legend>" +
+        KIND_ASK.map(function (k) {
+          return '<label class="busform__kind"><input type="radio" name="kind" value="' + k[0] + '"' +
+                 (said === k[0] ? " checked" : "") + " />" + k[1] + "</label>";
+        }).join("") + "</fieldset>" +
+        '<label data-kind="private">Private buses from here go up to' +
+        '<input name="private_to" maxlength="200" placeholder="e.g. Kaloor, Kakkanad" /></label>' +
+        '<label data-kind="ksrtc">KSRTC buses from here go up to' +
+        '<input name="ksrtc_to" maxlength="200" placeholder="e.g. Alappuzha, Aluva" /></label>' +
+        '<fieldset><legend>Do fast buses stop here? <span class="busform__hint">Fast Passenger, ' +
+        "Super Fast, Limited Stop</span></legend>" +
+        FAST_ASK.map(function (a) {
+          return '<label class="busform__kind"><input type="radio" name="fast" value="' + a[0] + '"' +
+                 (a[0] === "" ? " checked" : "") + " />" + a[1] + "</label>";
+        }).join("") + "</fieldset>" +
+        '<div class="stopfix__btns"><button type="submit">Send</button>' +
+        (said ? '<button type="button" class="ghostlink" data-back>Take it back</button>' : "") +
+        '<button type="button" class="ghostlink" data-cancel>Cancel</button></div>' +
+        '<p class="stopfix__msg" role="status"></p></form>';
+      var f = box.querySelector("form");
+      var msg = f.querySelector(".stopfix__msg");
+      // Only the "up to where" boxes for the buses that stop here.
+      function sync() {
+        var k = f.elements.kind.value;
+        f.querySelector('[data-kind="private"]').hidden = !(k === "private" || k === "both");
+        f.querySelector('[data-kind="ksrtc"]').hidden = !(k === "ksrtc" || k === "both");
+      }
+      Array.prototype.forEach.call(f.elements.kind, function (r) { r.addEventListener("change", sync); });
+      sync();
+      f.querySelector("[data-cancel]").addEventListener("click", links);
+      var back = f.querySelector("[data-back]");
+      if (back) back.addEventListener("click", function () {
+        msg.textContent = "Sending…";
+        post("/api/stops/buses", { key: stop.id, kind: null, device: device() })
+          .then(function () { rememberBuses(stop.id, null); links(); })
+          .catch(function (err) { msg.textContent = err.message; });
+      });
+      f.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var kind = f.elements.kind.value;
+        if (!kind) { msg.textContent = "Pick private, KSRTC or both."; return; }
+        msg.textContent = "Sending…";
+        post("/api/stops/buses", { key: stop.id, kind: kind, device: device(),
+                                   private_to: f.elements.private_to.value,
+                                   ksrtc_to: f.elements.ksrtc_to.value,
+                                   fast: f.elements.fast.value })
+          .then(function (j) {
+            rememberBuses(stop.id, kind);
+            var so = j.votes ? j.votes[kind] : 0;
+            box.innerHTML = (j.queued ? esc(SAVED) + " " : "Thanks! ") + (j.kind === kind
+              ? "Enough riders agree: Idavazhi now plans with this."
+              : "Idavazhi plans with this once " + (j.needed || 5) + " riders agree" +
+                (so ? " (" + so + " so far)" : "") + ".") +
+              " A place shows under the ride once 2 riders name it." +
+              ' <button type="button">Change</button>';
+            box.querySelector("button").addEventListener("click", function () { form(stop); });
+          })
+          .catch(function (err) { msg.textContent = err.message; });
+      });
+    }
+    links();
+    li.appendChild(box);
+  }
+
+  /* ------------------------------------------------ no bus runs here? */
+
+  // Stops this browser has said no bus runs at: { key: time }.
+  function saidNoBus() {
+    try { return JSON.parse(localStorage.getItem("vazhi.noBus") || "{}"); } catch (e) { return {}; }
+  }
+  function rememberNoBus(key, on) {
+    try {
+      var all = saidNoBus();
+      if (on) all[key] = Date.now(); else delete all[key];
+      localStorage.setItem("vazhi.noBus", JSON.stringify(all));
+    } catch (e) { /* only the label is lost */ }
+  }
+
+  function noBus(li, stops) {
+    var box = document.createElement("div");
+    box.className = "stopfix";
+    function links() {
+      var said = saidNoBus();
+      box.innerHTML = "No bus runs here? " + stops.map(function (s, i) {
+        return '<button type="button" data-i="' + i + '">' + esc(s.name || "unnamed stop") +
+               (said[s.id] ? " (you said no bus)" : "") + "</button>";
+      }).join(" &middot; ");
+      Array.prototype.forEach.call(box.querySelectorAll("button"), function (b) {
+        b.addEventListener("click", function () { ask(stops[Number(b.getAttribute("data-i"))]); });
+      });
+    }
+    function ask(stop) {
+      var said = saidNoBus()[stop.id];
+      box.innerHTML = '<div class="stopfix__form">' + (said
+        ? "You said no bus stops at <b>" + esc(stop.name || "this stop") + "</b>."
+        : "Is it true that no bus stops at <b>" + esc(stop.name || "this stop") +
+          "</b>? Say so only if you know the road.") +
+        '<div class="stopfix__btns"><button type="button" class="stopfix__yes">' +
+        (said ? "Take it back" : "Yes, no bus runs here") + '</button>' +
+        '<button type="button" class="ghostlink">Cancel</button></div>' +
+        '<p class="stopfix__msg" role="status"></p></div>';
+      box.querySelector(".ghostlink").addEventListener("click", links);
+      box.querySelector(".stopfix__yes").addEventListener("click", function () {
+        var msg = box.querySelector(".stopfix__msg");
+        msg.textContent = "Sending…";
+        post("/api/stops/nobus", { key: stop.id, no_bus: said ? null : true, device: device() })
+          .then(function (j) {
+            rememberNoBus(stop.id, !said);
+            if (said) { links(); return; }
+            box.innerHTML = (j.queued ? esc(SAVED) + " " : "Thanks! ") + (j.used
+              ? "Enough riders agree: Idavazhi no longer plans buses from or to this stop."
+              : "Idavazhi stops using this stop once " + (j.needed || 10) + " riders say no bus runs here" +
+                (j.no_bus ? " (" + j.no_bus + " so far)" : "") + ".") +
+              ' <button type="button">Undo</button>';
+            box.querySelector("button").addEventListener("click", function () { ask(stop); });
+          })
+          .catch(function (err) { msg.textContent = err.message; });
       });
     }
     links();
@@ -289,7 +476,7 @@ var STOPS = (function () {
       skip(q.key);
       $("ask").innerHTML = '<div class="ask__title">Thank you!</div><p class="ask__text">' +
         (j.queued ? esc(SAVED) + " " : "") +
-        "Answers like yours keep Vazhi's stops right. A name is used once " + q.needed +
+        "Answers like yours keep Idavazhi's stops right. A name is used once " + q.needed +
         " riders agree on it.</p>";
       setTimeout(function () { if (!showing || showing === q) { hideCard(); next(); } }, 2600);
     }).catch(function (err) { msg.textContent = err.message; });

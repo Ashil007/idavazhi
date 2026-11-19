@@ -1,4 +1,4 @@
-"""Load-test a running Vazhi: many pretend riders at once, then a summary.
+"""Load-test a running Idavazhi: many pretend riders at once, then a summary.
 
     python tools/load_test.py --users 20 --seconds 60
     python tools/load_test.py --base https://<ip>.sslip.io --users 10 --seconds 60

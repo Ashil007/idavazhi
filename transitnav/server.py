@@ -30,7 +30,7 @@ GZIP_MIN = 64 * 1024
 MAX_BODY = 4096
 MAX_QUERY = 120          # characters in a place search
 
-# Sent with every response. The policy allows only Vazhi's own scripts (the
+# Sent with every response. The policy allows only Idavazhi's own scripts (the
 # map libraries are in web/vendor), Google's web fonts, the blob: worker the
 # map draws with and the blob: alarm siren (alerts.js builds the sound in the
 # page), and Razorpay Checkout for bus tickets (its script and payment
@@ -166,7 +166,7 @@ def _coord(params, lat_key, lon_key):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "Vazhi"
+    server_version = "Idavazhi"
     sys_version = ""                 # do not advertise the Python version
     protocol_version = "HTTP/1.1"
     timeout = 60                     # a silent connection is dropped after a minute
@@ -179,7 +179,7 @@ class Handler(BaseHTTPRequestHandler):
     # search keystroke, map tile or file, which under load cost more to print
     # than to answer. No addresses or coordinates are logged.
     LOGGED = ("/api/plan", "/api/timings", "/api/stops/rename", "/api/stops/add", "/api/places/add",
-              "/api/stops/answer", "/api/feedback", "/api/ticket/order", "/api/ticket/paid")
+              "/api/stops/answer", "/api/stops/nobus", "/api/stops/buses", "/api/feedback", "/api/fares/wrong", "/api/ticket/order", "/api/ticket/paid")
 
     def log_request(self, code="-", size="-"):
         path = (self.path or "").split("?")[0]
@@ -226,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
             return False
 
     def _same_site(self):
-        """A post must come from Vazhi's own pages: JSON (which a form on
+        """A post must come from Idavazhi's own pages: JSON (which a form on
         another site cannot send without the browser asking first), and, when
         the browser names the page it came from, this site (CSRF)."""
         if "application/json" not in (self.headers.get("Content-Type") or ""):
@@ -292,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
             body = fh.read()
         extra = {"Last-Modified": formatdate(mtime, usegmt=True)}
         if rel.startswith("icons/"):
-            # Razorpay's payment window loads the Vazhi logo from its own site.
+            # Razorpay's payment window loads the Idavazhi logo from its own site.
             extra["Access-Control-Allow-Origin"] = "*"
         if ctype.startswith(("video/", "audio/")):
             # Video players (Safari above all) ask for pieces: "Range: bytes=0-1".
@@ -553,7 +553,7 @@ class Handler(BaseHTTPRequestHandler):
                 # A trip shared before the app moved to /app.
                 self._redirect("/app?" + parsed.query)
             elif route == "/":
-                self._static("home.html")          # the Vazhi website
+                self._static("home.html")          # the Idavazhi website
             elif route == "/app/":
                 self._redirect("/app" + ("?" + parsed.query if parsed.query else ""))
             elif route == "/app":
@@ -582,6 +582,7 @@ class Handler(BaseHTTPRequestHandler):
         destination = _coord(params, "dlat", "dlon")
         mode = (params.get("mode") or ["bus"])[0]
         access = (params.get("access") or ["walk"])[0]
+        operator = (params.get("bus") or ["any"])[0]     # KSRTC, private or any bus
         _check_modes(mode, access)
 
         self.started = True
@@ -619,10 +620,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not limits.plan_slots.acquire(timeout=0.05):
                     report("start", "Many trips are being planned right now - yours is next")
                     if not limits.plan_slots.acquire(timeout=limits.PLAN_WAIT_S):
-                        raise PlanError("Vazhi is very busy right now. Please try again in a "
-                                        "minute.", title="Vazhi is busy")
+                        raise PlanError("Idavazhi is very busy right now. Please try again in a "
+                                        "minute.", title="Idavazhi is busy")
                 try:
-                    result = plan(origin, destination, mode, report, access)
+                    result = plan(origin, destination, mode, report, access, operator)
                 finally:
                     limits.plan_slots.release()
                 _log_plan(mode, access, "ok", started)
@@ -674,6 +675,10 @@ class Handler(BaseHTTPRequestHandler):
                 _search_cache.clear()          # found by the next search at once
             elif route == "/api/stops/add":
                 self._json(200, dict(stopnames.add(body, client), ok=True, needed=stopnames.CONFIRM))
+            elif route == "/api/stops/nobus":
+                self._json(200, dict(stopnames.no_bus(body, client), ok=True))
+            elif route == "/api/stops/buses":
+                self._json(200, dict(stopnames.buses(body, client), ok=True))
             else:   # /api/stops/answer
                 stopnames.answer(body, client)
                 self._json(200, {"ok": True})
@@ -685,10 +690,11 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self._json(500, {"error": OOPS})
 
-    def _feedback_post(self):
-        """A rider's message to the maker (feedback.py)."""
+    def _feedback_post(self, path="/api/feedback"):
+        """A rider's message to the maker, or a "Wrong fare?" report (feedback.py)."""
         try:
-            self._json(200, {"ok": True, "id": feedback.add(self._body(), self._client())})
+            send = feedback.fare if path == "/api/fares/wrong" else feedback.add
+            self._json(200, {"ok": True, "id": send(self._body(), self._client())})
         except feedback.FeedbackError as exc:
             self._json(400, {"error": str(exc)})
         except (ValueError, UnicodeDecodeError):
@@ -717,17 +723,18 @@ class Handler(BaseHTTPRequestHandler):
         """Riders' bus times, and a non-streaming /api/plan for scripts and curl."""
         parsed = urllib.parse.urlparse(self.path)
         if not self._same_site():
-            self._json(403, {"error": "Requests must be JSON from Vazhi's own pages."})
+            self._json(403, {"error": "Requests must be JSON from Idavazhi's own pages."})
             return
         if parsed.path in ("/api/timings", "/api/timings/vote", "/api/stops/rename",
-                           "/api/stops/add", "/api/stops/answer", "/api/places/add"):
+                           "/api/stops/add", "/api/stops/answer", "/api/stops/nobus", "/api/stops/buses",
+                           "/api/places/add"):
             self._timings_post(parsed.path)
             return
         if parsed.path in ("/api/ticket/order", "/api/ticket/paid"):
             self._ticket_post(parsed.path)
             return
-        if parsed.path == "/api/feedback":
-            self._feedback_post()
+        if parsed.path in ("/api/feedback", "/api/fares/wrong"):
+            self._feedback_post(parsed.path)
             return
         if parsed.path == "/api/crowd":
             # A rider's answer to "How crowded is this bus?" (crowd.py): kept in
@@ -774,10 +781,11 @@ class Handler(BaseHTTPRequestHandler):
                                       "mode, access?}"})
             return
         if not limits.plan_slots.acquire(timeout=limits.PLAN_WAIT_S):
-            self._json(503, {"error": "Vazhi is very busy right now. Please try again in a minute."})
+            self._json(503, {"error": "Idavazhi is very busy right now. Please try again in a minute."})
             return
         try:
-            self._json(200, plan(origin, destination, mode, access=access))
+            self._json(200, plan(origin, destination, mode, access=access,
+                                 operator=body.get("bus", "any")))
         except (PlanError, overpass.OverpassError) as exc:
             self._json(400, {"error": str(exc)})
         except Exception:  # noqa: BLE001

@@ -1,6 +1,6 @@
-/* Vazhi service worker.
+/* Idavazhi service worker.
  *
- * - Makes Vazhi installable, and lets it open without internet: the app's own
+ * - Makes Idavazhi installable, and lets it open without internet: the app's own
  *   files (and the map libraries) are kept in a cache. They are always fetched
  *   fresh when online, so an update shows up on the next open; the cache is
  *   only the fallback.
@@ -12,7 +12,7 @@
  *   service worker; tapping one brings the trip page back to the front. */
 "use strict";
 
-var CACHE = "vazhi-shell-v70";
+var CACHE = "vazhi-shell-v91";
 var OFFLINE = "vazhi-offline-trips";     // saved trips' routes and map tiles (trips.js)
 var SHELL = [
   "/", "/app", "home.css", "home.js", "theme.js", "style.css", "manifest.webmanifest",
@@ -20,7 +20,7 @@ var SHELL = [
   "icons/icon-192.png", "icons/icon-512.png", "icons/favicon-32.png",
   // The sea and the basic letters of the map; map tiles stay online-only.
   "map/sea.geojson", "map/region.geojson", "fonts/Noto%20Sans%20Regular/0-255.pbf", "fonts/Noto%20Sans%20Medium/0-255.pbf",
-  // The map libraries, served by Vazhi itself (web/vendor).
+  // The map libraries, served by Idavazhi itself (web/vendor).
   "vendor/leaflet/leaflet.css", "vendor/leaflet/leaflet.js",
   "vendor/maplibre/maplibre-gl.css", "vendor/maplibre/maplibre-gl.js",
   "vendor/maplibre/leaflet-maplibre-gl.js", "vendor/qrcode/qrcode.js"

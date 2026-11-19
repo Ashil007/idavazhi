@@ -4,7 +4,7 @@
 
 Before you run it:
   1. In Telegram, open @BotFather, send /newbot, and follow the steps (any
-     name, e.g. "Vazhi Feedback"; a username ending in "bot").
+     name, e.g. "Idavazhi Feedback"; a username ending in "bot").
   2. BotFather replies with a token like 123456789:AA... - keep it secret.
 
 This asks for the token (typed in, not shown), waits while you send your new
@@ -53,7 +53,7 @@ def main():
     settings.put("VAZHI_TELEGRAM_TOKEN", token)
     settings.put("VAZHI_TELEGRAM_CHAT", str(chat["id"]))
     call(token, "sendMessage", {"chat_id": chat["id"],
-                                "text": "Vazhi is connected. Riders' messages will arrive here."})
+                                "text": "Idavazhi is connected. Riders' messages will arrive here."})
     print("Done. Saved in data/vazhi.env, and a test message is on its way to %s."
           % (chat.get("first_name") or "you"))
     return 0

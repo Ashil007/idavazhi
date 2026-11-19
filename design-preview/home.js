@@ -1,7 +1,7 @@
-/* Vazhi website: the "Download the app" buttons, the install steps for each
+/* Idavazhi website: the "Download the app" buttons, the install steps for each
  * device, and small touches (nav border on scroll, sections fading in).
  *
- * "Download" installs Vazhi as an app (a Progressive Web App): Android and
+ * "Download" installs Idavazhi as an app (a Progressive Web App): Android and
  * computers with Chrome or Edge get the browser's own Install prompt; iPhones
  * have none, so the button shows Safari's Share > Add to Home Screen steps.
  * The installed app opens at /app (manifest.webmanifest). */
@@ -16,7 +16,7 @@
   var installed = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
   var prompt = null;
 
-  // The service worker makes Vazhi installable (and lets it open offline).
+  // The service worker makes Idavazhi installable (and lets it open offline).
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function () { /* the page works without */ });
   }
@@ -63,8 +63,8 @@
   });
   window.addEventListener("appinstalled", function () {
     prompt = null;
-    label("Installed ✓ Open Vazhi");
-    status("Vazhi is installed. Find it on your " + (isMobile ? "home screen" : "desktop or Start menu") + ".");
+    label("Installed ✓ Open Idavazhi");
+    status("Idavazhi is installed. Find it on your " + (isMobile ? "home screen" : "desktop or Start menu") + ".");
     buttons.forEach(function (b) { b.dataset.open = "1"; });
   });
 
@@ -85,17 +85,17 @@
       return (safari ? "" : "<p style='margin-bottom:12px'>First open this page in <b>Safari</b> &mdash; only Safari can add apps on iPhone.</p>") +
         "<ol><li>Tap <b>Share</b> <span class='key'>⬆</span> at the bottom of the screen.</li>" +
         "<li>Scroll down and tap <b>Add to Home Screen</b>.</li>" +
-        "<li>Tap <b>Add</b>. Vazhi is now on your home screen.</li></ol>";
+        "<li>Tap <b>Add</b>. Idavazhi is now on your home screen.</li></ol>";
     }
     if (isMobile) {
       return "<ol><li>Tap the <b>⋮</b> menu at the top right of the browser.</li>" +
         "<li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li>" +
-        "<li>Tap <b>Install</b>. Vazhi is now on your home screen.</li></ol>" +
+        "<li>Tap <b>Install</b>. Idavazhi is now on your home screen.</li></ol>" +
         "<p style='margin-top:12px'>Don't see it? Open this page in <b>Chrome</b>.</p>";
     }
     return "<ol><li>Open this page in <b>Chrome</b> or <b>Microsoft Edge</b>.</li>" +
-      "<li>Click the install icon <span class='key'>⊕</span> at the right end of the address bar, or the <b>⋮</b> menu &rarr; <b>Install Vazhi</b>.</li>" +
-      "<li>Vazhi opens in its own window.</li></ol>" +
+      "<li>Click the install icon <span class='key'>⊕</span> at the right end of the address bar, or the <b>⋮</b> menu &rarr; <b>Install Idavazhi</b>.</li>" +
+      "<li>Idavazhi opens in its own window.</li></ol>" +
       "<p style='margin-top:12px'>Or skip installing and <a href='/app'>use the web version</a>.</p>";
   }
 

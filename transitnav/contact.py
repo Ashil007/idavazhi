@@ -1,4 +1,4 @@
-"""Who runs Vazhi and how to reach them, for the policy pages.
+"""Who runs Idavazhi and how to reach them, for the policy pages.
 
 The pages /privacy, /terms, /refunds and /contact (web/*.html) hold
 {{OWNER}}, {{PLACE}}, {{CONTACT_LINE}} and {{CONTACT_LIST}}; the server fills

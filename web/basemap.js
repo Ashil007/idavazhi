@@ -1,6 +1,7 @@
-/* The base map: a night-mode map by default - near-black land, quiet grey
- * roads and a few labels - so the trip's own colours stand out. A switch on
- * the map turns on the plain light map instead; the choice is remembered.
+/* The base map: quiet land and roads with few labels, so the trip's own
+ * colours stand out. It is light or dark with the rest of the app (theme.js):
+ * a warm paper map by day, a warm near-black one at night. The button under
+ * the zoom buttons switches the whole app, map and panel together.
  *
  * Everything the map draws comes from this app's own server - no outside
  * map service:
@@ -23,24 +24,24 @@ var BASEMAP = (function () {
   // fonts here do not carry.
   var NAME = ["coalesce", ["get", "name_en"], ["get", "name:latin"], ["get", "name"]];
   var PALETTES = {
+    // Tinted toward the app's cream and warm near-black (style.css).
     light: {
-      land: "#f4f3ef", water: "#cfe3f1", park: "#e2eedb", wood: "#e7eee0",
-      building: "#ebe8e3", road: "#ffffff", casing: "#e1ddd5",
-      major: "#fdebb8", majorCasing: "#efd58f", rail: "#cbc6bd",
-      text: "#3f4247", textSoft: "#80848b", halo: "#ffffff", boundary: "#bdb7cc",
+      land: "#f6f2e9", water: "#cde2ee", park: "#e1edd8", wood: "#e6eddc",
+      building: "#ece6da", road: "#ffffff", casing: "#e3dccb",
+      major: "#fde9b0", majorCasing: "#eccf85", rail: "#cbc3b3",
+      text: "#3d3a33", textSoft: "#7d776a", halo: "#fffdf8", boundary: "#c4bba6",
       station: "#6c5dd3"
     },
     dark: {
-      land: "#121316", water: "#1f2227", park: "#151a17", wood: "#141816",
-      building: "#1c1e22", road: "#30343b", casing: "#191b1f",
-      major: "#4f5560", majorCasing: "#22252a", rail: "#46423d",
-      text: "#959aa3", textSoft: "#686d76", halo: "#0d0e10", boundary: "#34373e",
+      land: "#15140f", water: "#1c2124", park: "#171b14", wood: "#151812",
+      building: "#1e1c17", road: "#35312a", casing: "#1a1813",
+      major: "#595243", majorCasing: "#25221b", rail: "#4a443a",
+      text: "#a39b8b", textSoft: "#746d5f", halo: "#0f0e0b", boundary: "#3a352b",
       station: "#b4a8ff"
     }
   };
-  var THEME_KEY = "vazhi-map-theme";
-  var theme = "dark";
-  try { if (localStorage.getItem(THEME_KEY) === "light") theme = "light"; } catch (e) { /* private window */ }
+  function pageTheme() { return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light"; }
+  var theme = pageTheme();
   var C = PALETTES[theme];
   var ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
   // The area the map covers (tools/build_map.py), as [[south, west], [north, east]].
@@ -285,18 +286,24 @@ var BASEMAP = (function () {
         btn.setAttribute("role", "button");
         function show() {
           btn.innerHTML = theme === "dark" ? SUN : MOON;
-          btn.title = theme === "dark" ? "Light map" : "Dark map";
-          btn.setAttribute("aria-label", btn.title);
+          btn.title = theme === "dark" ? "Light mode" : "Dark mode";
+          btn.setAttribute("aria-label", "Switch to " + btn.title.toLowerCase());
           document.documentElement.setAttribute("data-map-theme", theme);
+        }
+        function follow() {
+          if (theme === pageTheme()) return;
+          theme = pageTheme();
+          show();
+          restyle();
         }
         show();
         L.DomEvent.disableClickPropagation(box);
+        // The app's one light/dark choice (theme.js): this button changes it,
+        // and the map follows wherever it was changed.
+        document.addEventListener("vazhi:theme", follow);
         L.DomEvent.on(btn, "click", function (e) {
           L.DomEvent.preventDefault(e);
-          theme = theme === "dark" ? "light" : "dark";
-          try { localStorage.setItem(THEME_KEY, theme); } catch (err) { /* not remembered */ }
-          show();
-          restyle();
+          if (window.VAZHI_THEME) window.VAZHI_THEME.toggle();
         });
         return box;
       }

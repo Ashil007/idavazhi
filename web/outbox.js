@@ -4,7 +4,7 @@
  * called?", adding a bus time and voting on one all post to the server. On a
  * bus the signal comes and goes, so when a post can't get through it is kept
  * here (localStorage) and sent by itself once the phone is back online: when
- * the browser says it is online again, when Vazhi is opened or brought back to
+ * the browser says it is online again, when Idavazhi is opened or brought back to
  * the front, and every minute while anything is waiting.
  *
  *   OUTBOX.post(url, body)  ->  Promise of the server's answer, or
@@ -36,7 +36,7 @@ var OUTBOX = (function () {
                         body: JSON.stringify(body) });
   }
 
-  // The server or the link to it is down (not "no" from Vazhi itself): try later.
+  // The server or the link to it is down (not "no" from Idavazhi itself): try later.
   function later(status) { return status === 502 || status === 503 || status === 504; }
 
   function keep(url, body) {

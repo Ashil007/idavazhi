@@ -1,4 +1,4 @@
-/* Location and alarms are required: Vazhi's point is the alarm before your
+/* Location and alarms are required: Idavazhi's point is the alarm before your
  * stop, and that needs both your location (to know the stop is near) and
  * notifications (to wake you when the screen is off or another app is open).
  *
@@ -8,7 +8,7 @@
  * checks again when the rider comes back from there.
  *
  * Cases where a permission cannot be given at all also get their own words:
- * a page that is not https, an iPhone where Vazhi is not on the Home Screen
+ * a page that is not https, an iPhone where Idavazhi is not on the Home Screen
  * (Safari has no alarms in a tab), and in-app browsers without notifications.
  */
 var PERMIT = (function () {
@@ -71,11 +71,11 @@ var PERMIT = (function () {
     if (isIOS()) {
       return "<b>Location:</b> open <b>Settings &gt; Privacy &amp; Security &gt; Location Services</b>, " +
              "turn it on, then set <b>Safari Websites</b> to <b>While Using the App</b>.<br>" +
-             "<b>Alarms:</b> open <b>Settings &gt; Notifications &gt; Vazhi</b> and turn on " +
+             "<b>Alarms:</b> open <b>Settings &gt; Notifications &gt; Idavazhi</b> and turn on " +
              "<b>Allow Notifications</b>.";
     }
     if (isAndroid() && installed()) {
-      return "Touch and hold the Vazhi icon on your home screen, tap <b>App info</b> (&#9432;), " +
+      return "Touch and hold the Idavazhi icon on your home screen, tap <b>App info</b> (&#9432;), " +
              "and allow <b>Location</b> and <b>Notifications</b>. Then come back here.";
     }
     if (isAndroid()) {
@@ -92,10 +92,10 @@ var PERMIT = (function () {
     var help = "", button = "", again = false;
     if (g === "insecure" || n === "insecure") {
       help = "This page is not secure (it is not <b>https</b>), so the phone allows neither. " +
-             "Open Vazhi from its <b>https://</b> link.";
+             "Open Idavazhi from its <b>https://</b> link.";
     } else if (g === "unsupported" || n === "unsupported") {
       help = "This browser cannot " + (g === "unsupported" ? "share your location" : "show alarms") +
-             ". If you opened Vazhi from WhatsApp, Instagram or another app, open the link in " +
+             ". If you opened Idavazhi from WhatsApp, Instagram or another app, open the link in " +
              (isIOS() ? "<b>Safari</b>" : "<b>Chrome</b>") + " instead.";
     } else if (g === "denied" || n === "denied") {
       help = "Your phone blocked " +
@@ -104,8 +104,8 @@ var PERMIT = (function () {
              ":<br>" + blockedHow();
       again = true;
     } else if (n === "install") {
-      help = "On iPhone, alarms work only when Vazhi is on your Home Screen: tap <b>Share</b> " +
-             "(the square with an arrow), then <b>Add to Home Screen</b>, and open Vazhi from there.";
+      help = "On iPhone, alarms work only when Idavazhi is on your Home Screen: tap <b>Share</b> " +
+             "(the square with an arrow), then <b>Add to Home Screen</b>, and open Idavazhi from there.";
       if (g === "prompt") button = "Allow location";
     } else {
       button = g === "prompt" && n === "prompt" ? "Allow location and alarms"

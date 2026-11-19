@@ -1,5 +1,5 @@
 @echo off
-REM Launch Vazhi.
+REM Launch Idavazhi.
 cd /d "%~dp0"
 python serve.py %*
 if errorlevel 1 (

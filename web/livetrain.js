@@ -138,7 +138,7 @@ var LIVETRAIN = (function () {
           layer.clearLayers();
           if (!d.seen) {
             out.className = "livetrain__out is-none";
-            out.innerHTML = "No Vazhi rider on this train is sharing where it is right now. " +
+            out.innerHTML = "No Idavazhi rider on this train is sharing where it is right now. " +
               "On board? Turn on <b>Share where this train is</b> under the alarm, and others can see it.";
             return;
           }

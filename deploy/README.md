@@ -1,6 +1,6 @@
-# Putting Vazhi online (free, on Oracle Cloud)
+# Putting Idavazhi online (free, on Oracle Cloud)
 
-This puts Vazhi on a free cloud server. It stays up when your PC is off, and
+This puts Idavazhi on a free cloud server. It stays up when your PC is off, and
 its link never changes (`https://<your-ip>.sslip.io/app`). You do steps 1–3
 on the Oracle website (about 20 minutes). Step 4 is one command on your PC.
 
@@ -42,7 +42,7 @@ The server blocks web visitors until you allow them:
 
 (The setup script opens the same two ports in the server's own firewall.)
 
-## 4. Send Vazhi to the server
+## 4. Send Idavazhi to the server
 
 On your PC, in this folder:
 

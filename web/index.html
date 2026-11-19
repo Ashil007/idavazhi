@@ -3,31 +3,32 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Vazhi</title>
+<title>Idavazhi</title>
 <meta name="description" content="Door-to-door trips by bus, train and metro in Kerala, with an alarm before your stop." />
-<meta name="theme-color" content="#0d1117" />
+<meta name="theme-color" content="#f6b73c" data-dark="#1b1812" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Vazhi" />
+<meta name="apple-mobile-web-app-title" content="Idavazhi" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=Noto+Sans+Malayalam:wght@600;700&display=swap" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
 <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css" />
 <link rel="stylesheet" href="style.css" />
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="permit" id="permit" hidden role="dialog" aria-modal="true" aria-labelledby="permit-title">
   <div class="permit__box">
     <h2 id="permit-title">Before you start</h2>
-    <p class="permit__lead">Vazhi needs two permissions to work. You can't plan a trip without them.</p>
+    <p class="permit__lead">Idavazhi needs two permissions to work. You can't plan a trip without them.</p>
     <ul class="permit__list">
       <li><span class="permit__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
-        <div><b>Location</b><span>Finds the stop nearest you and follows your bus, so Vazhi knows when your stop is near.</span></div>
+        <div><b>Location</b><span>Finds the stop nearest you and follows your bus, so Idavazhi knows when your stop is near.</span></div>
         <em class="permit__state" id="permit-geo-state"></em></li>
       <li><span class="permit__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
         <div><b>Alarms</b> (notifications)<span>Wake you before your stop, even when the screen is off or another app is open.</span></div>
@@ -86,12 +87,16 @@
     <div class="sheet-handle" id="sheet-handle" role="button" tabindex="0"
          aria-label="Drag or tap to resize the panel"><span></span></div>
     <header class="panel__head">
-      <h1><img src="icons/icon-192.png" alt="" width="36" height="36" /><span class="brand-ml" lang="ml">വഴി</span><span class="sr-only">Vazhi</span></h1>
+      <h1><img src="icons/icon-192.png" alt="" width="36" height="36" /><span class="brand-ml" lang="ml">ഇടവഴി</span><span class="sr-only">Idavazhi</span></h1>
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+        <svg class="theme-toggle__moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+        <svg class="theme-toggle__sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+      </button>
       <p class="sub">Bus, train and metro across Kerala &mdash; door to door</p>
     </header>
 
     <div class="install" id="install" hidden>
-      <button type="button" class="install__btn" id="install-btn">Install Vazhi on this phone</button>
+      <button type="button" class="install__btn" id="install-btn">Install Idavazhi on this phone</button>
       <button type="button" class="install__close" id="install-close" aria-label="Not now">&times;</button>
       <p class="install__how" id="install-how" hidden></p>
     </div>
@@ -99,7 +104,8 @@
       internet - a trip alarm that is already on keeps working.</p>
 
     <section class="block" id="points-block">
-      <h2 class="block__title">Points</h2>
+      <h2 class="sr-only">Where from and where to</h2>
+      <div class="route">
       <div class="point" id="point-origin" data-role="origin">
         <span class="point__dot point__dot--origin"></span>
         <div class="point__body">
@@ -108,7 +114,7 @@
                  placeholder="Where from? Search a place" aria-label="Start"
                  aria-autocomplete="list" aria-controls="origin-suggest" />
         </div>
-        <button class="mini" id="locate" title="Use your current location as the start">Locate</button>
+        <button type="button" class="iconbtn" id="locate" title="Use your current location as the start" aria-label="Use your current location as the start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
       </div>
       <ul class="suggest" id="origin-suggest" role="listbox" hidden></ul>
       <div class="point" id="point-destination" data-role="destination">
@@ -124,6 +130,8 @@
                 title="Remove the destination"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <ul class="suggest" id="dest-suggest" role="listbox" hidden></ul>
+      <button type="button" class="route__swap" id="swap" title="Swap start and destination" aria-label="Swap start and destination"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4v15M8 19l-3.5-3.5M8 19l3.5-3.5M16 20V5M16 5l-3.5 3.5M16 5l3.5 3.5"/></svg></button>
+      </div>
       <p class="hint" id="hint">Clicking the map sets the highlighted point.</p>
       <p class="where" id="where" hidden></p>
     </section>
@@ -134,8 +142,10 @@
     </div>
 
 
-    <button class="plan" id="plan">Plan journey</button>
-    <button class="ghost" id="clear">Clear</button>
+    <div class="actions">
+      <button type="button" class="plan" id="plan">Plan journey</button>
+      <button type="button" class="ghost actions__clear" id="clear">Clear</button>
+    </div>
 
     <section class="block" id="status-block" hidden>
       <p class="now" id="status-now"></p>
@@ -157,31 +167,6 @@
       <div class="summary" id="summary"></div>
       <div class="crowd-line" id="crowd-line" hidden></div>
       <div class="leave" id="leave" hidden></div>
-      <button type="button" class="ghost savetrip" id="trip-save" aria-pressed="false" aria-controls="trip-save-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
-        <span id="trip-save-text">Save trip</span></button>
-      <div class="savebox" id="trip-save-box" hidden>
-        <div id="trip-save-pick">
-          <p class="savebox__q">Save this trip as</p>
-          <div class="savebox__kinds" id="trip-save-kinds" role="radiogroup" aria-label="Save as">
-            <button type="button" role="radio" data-kind="home" aria-checked="true">Home</button>
-            <button type="button" role="radio" data-kind="work" aria-checked="false">Work</button>
-            <button type="button" role="radio" data-kind="custom" aria-checked="false">Other&hellip;</button>
-          </div>
-          <input type="text" class="savebox__name" id="trip-save-name" maxlength="24" placeholder="Name it, like College or Gym" aria-label="Name for this trip" hidden />
-          <p class="savebox__msg" id="trip-save-msg" aria-live="polite"></p>
-          <div class="savebox__acts">
-            <button type="button" class="savebox__ok" id="trip-save-ok">Save</button>
-            <button type="button" class="savebox__cancel" id="trip-save-cancel">Cancel</button>
-          </div>
-          <p class="savebox__note">Kept on this phone only, with a copy of the route and map for when there's no internet.</p>
-        </div>
-        <div id="trip-save-have" hidden>
-          <p class="savebox__msg" id="trip-save-have-text" aria-live="polite"></p>
-          <button type="button" class="savebox__cancel" id="trip-save-remove">Remove from saved trips</button>
-        </div>
-      </div>
-      <button type="button" class="ghost share" id="share">Share this trip</button>
       <div class="warnings" id="warnings" hidden></div>
       <div class="trip" id="trip" hidden>
         <div class="ring trip__when">
@@ -264,7 +249,36 @@
         <button type="button" class="ghost trip__sim" id="trip-sim">See how the alarm works (demo)</button>
         <button type="button" class="ghost" id="trip-stop" hidden>Stop trip alerts</button>
         <p class="trip__status" id="trip-status" hidden></p>
-        <p class="trip__note">Vazhi stays active in the background. The screen stays on while open.</p>
+        <p class="trip__note">Idavazhi stays active in the background. The screen stays on while open.</p>
+      </div>
+      <div class="tripacts" id="trip-acts">
+      <button type="button" class="ghost savetrip" id="trip-save" aria-pressed="false" aria-controls="trip-save-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+        <span id="trip-save-text">Save trip</span></button>
+      <button type="button" class="ghost share" id="share">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M12 3 8 7M12 3l4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>
+        <span>Share</span></button>
+      </div>
+      <div class="savebox" id="trip-save-box" hidden>
+        <div id="trip-save-pick">
+          <p class="savebox__q">Save this trip as</p>
+          <div class="savebox__kinds" id="trip-save-kinds" role="radiogroup" aria-label="Save as">
+            <button type="button" role="radio" data-kind="home" aria-checked="true">Home</button>
+            <button type="button" role="radio" data-kind="work" aria-checked="false">Work</button>
+            <button type="button" role="radio" data-kind="custom" aria-checked="false">Other&hellip;</button>
+          </div>
+          <input type="text" class="savebox__name" id="trip-save-name" maxlength="24" placeholder="Name it, like College or Gym" aria-label="Name for this trip" hidden />
+          <p class="savebox__msg" id="trip-save-msg" aria-live="polite"></p>
+          <div class="savebox__acts">
+            <button type="button" class="savebox__ok" id="trip-save-ok">Save</button>
+            <button type="button" class="savebox__cancel" id="trip-save-cancel">Cancel</button>
+          </div>
+          <p class="savebox__note">Kept on this phone only, with a copy of the route and map for when there's no internet.</p>
+        </div>
+        <div id="trip-save-have" hidden>
+          <p class="savebox__msg" id="trip-save-have-text" aria-live="polite"></p>
+          <button type="button" class="savebox__cancel" id="trip-save-remove">Remove from saved trips</button>
+        </div>
       </div>
       <ol class="itinerary" id="itinerary"></ol>
       <details class="more" id="more"><summary>More about this trip</summary>
@@ -274,17 +288,24 @@
 
     <p class="offline" id="offline" hidden></p>
 
-    <button type="button" class="ghost addstop-btn" id="add-stop">Add a missing bus stop</button>
-    <button type="button" class="ghost ticket-btn" id="ticket-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4Z"/><path d="M14 6v2M14 11v2M14 16v2"/></svg>Buy me a bus ticket</button>
+    <nav class="morelist" aria-label="More">
+      <button type="button" class="morelist__row addstop-btn" id="add-stop">
+        <span class="morelist__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><path d="M12 7v6M9 10h6"/></svg></span>
+        <span class="morelist__t"><b>Add a missing bus stop</b><span>Put it on the map for other riders</span></span>
+        <svg class="morelist__go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <button type="button" class="morelist__row ticket-btn" id="ticket-open">
+        <span class="morelist__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4Z"/><path d="M14 6v2M14 11v2M14 16v2"/></svg></span>
+        <span class="morelist__t"><b>Buy me a bus ticket</b><span>Help keep Idavazhi free</span></span>
+        <svg class="morelist__go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <button type="button" class="morelist__row about-btn" id="about-open">
+        <span class="morelist__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r=".6" fill="currentColor"/></svg></span>
+        <span class="morelist__t"><b>About Idavazhi</b><span>Why I made it &middot; send me a message</span></span>
+        <svg class="morelist__go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+    </nav>
 
     <footer class="panel__foot">
       Times are estimates, not a timetable.
     </footer>
-
-    <button type="button" class="about-btn" id="about-open">
-      <span class="about-btn__t">About Vazhi</span>
-      <span class="about-btn__s">Why I made it &middot; send me a message</span>
-    </button>
   </aside>
 
   <main class="map-wrap">
@@ -294,6 +315,7 @@
            you reach the stop. -->
       <div class="mapmodes" id="mapprefer" role="group" aria-label="The best way, of every mode"></div>
       <div class="mapmodes" id="mapmodes" role="group" aria-label="Or only this way"></div>
+      <div class="mapmodes" id="mapbus" role="group" aria-label="KSRTC or private bus" hidden></div>
       <div class="mapmodes" id="mapaccess" role="group" aria-label="Getting to the stop"></div>
       <div class="mapstops">
         <label class="mapstops__row">
@@ -302,10 +324,10 @@
           <span class="mapstops__track" aria-hidden="true"></span>
         </label>
         <ul class="mapstops__key" id="stops-key" hidden>
-          <li><i style="background:#22a06b"></i>Bus stop</li>
+          <li><i class="key--bus"></i>Bus stop</li>
           <li><b class="stand" aria-hidden="true"><svg viewBox="0 0 26 26"><rect x="1" y="1" width="24" height="24" rx="6" fill="#fff"/><rect x="3" y="3" width="20" height="20" rx="4.5" fill="#22a06b"/><rect x="7.5" y="6.5" width="11" height="11" rx="2" fill="#fff"/><rect x="8.5" y="17" width="2.5" height="2.5" fill="#fff"/><rect x="15" y="17" width="2.5" height="2.5" fill="#fff"/><rect x="9" y="8.5" width="8" height="4" fill="#22a06b"/><circle cx="10" cy="15" r="1" fill="#22a06b"/><circle cx="16" cy="15" r="1" fill="#22a06b"/></svg></b>Bus stand</li>
-          <li><i class="big" style="background:#e8833a"></i>Railway station</li>
-          <li><i class="big" style="background:#8b5cf6"></i>Metro station</li>
+          <li><i class="big key--train"></i>Railway station</li>
+          <li><i class="big key--metro"></i>Metro station</li>
         </ul>
       </div>
       <div class="legend" id="legend" hidden></div>

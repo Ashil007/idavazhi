@@ -13,6 +13,8 @@ have expired, so restarting the server costs nothing.
 
 Roads are not preloaded: walking, riding and bus legs come from the street
 routing server, which already holds every road and answers in under a second.
+The roads of OpenStreetMap's bus routes are (busroutes.py): they say which
+stops buses really call at and which roads they take.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ import sys
 import threading
 import time
 
-from . import overpass, timetable
+from . import busroutes, overpass, timetable
 from .config import MODES
 
 # (south, west, north, east). Kept generous: a trip near the edge still finds
@@ -46,6 +48,7 @@ DATASETS = [
     ("train", "stops", "railway stations"),
     ("train", "network", "railway track"),
     ("bus", "stops", "bus stops"),
+    ("bus", "routes", "bus routes"),
 ]
 
 # Shown in the web page while a preload runs.
@@ -72,6 +75,9 @@ def _builders(mode: str, kind: str):
     """The planner's exact per-tile query (the cache key) and a long-timeout
     version for a block of tiles."""
     cfg = MODES[mode]
+    if kind == "routes":
+        return (busroutes.build_query,
+                lambda box: busroutes.build_query(box, timeout=overpass.PRELOAD_TIMEOUT_S))
     if kind == "stops":
         f = cfg["stop_filters"]
         return (lambda box: overpass.build_stops_in_bbox_query(box, f),
@@ -89,7 +95,7 @@ def _load(label, bbox, datasets, log, max_block=None, last=True, workers=1) -> t
     "running" because another phase follows."""
     plan = []
     for mode, kind, what in datasets:
-        deg = MODES[mode]["tile_deg"]
+        deg = busroutes.TILE_DEG if kind == "routes" else MODES[mode]["tile_deg"]
         build, build_big = _builders(mode, kind)
         tiles = overpass.tiles_for_bbox(bbox, deg)
         todo = [t for t in tiles

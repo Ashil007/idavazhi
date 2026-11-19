@@ -1,6 +1,6 @@
 /* Three small windows over the app:
  *
- * - About Vazhi: why it exists (the maker fell asleep on a bus and woke
+ * - About Idavazhi: why it exists (the maker fell asleep on a bus and woke
  *   10 km past his stop) and a box to message the maker. Messages are saved
  *   on the server and sent to the maker's Telegram (feedback.py); without
  *   internet they wait on the phone (outbox.js).
@@ -103,14 +103,14 @@ var ABOUT = (function () {
   /* --------------------------------------------------------- about */
 
   var about = dialog("about", "about-title",
-    '<p class="about__eyebrow">About Vazhi</p>' +
-    '<h2 class="about__title" id="about-title">Why I made Vazhi</h2>' +
+    '<p class="about__eyebrow">About Idavazhi</p>' +
+    '<h2 class="about__title" id="about-title">Why I made Idavazhi</h2>' +
     '<p class="about__story">I\'m Ashil, a student from Kerala. One day I fell asleep on the bus ' +
     'and woke up 10&nbsp;km after my stop, and had to find my way back from there. No app could ' +
-    'simply wake me before my stop, so I built one. Tell Vazhi where you\'re going: it finds your ' +
+    'simply wake me before my stop, so I built one. Tell Idavazhi where you\'re going: it finds your ' +
     'bus, train or metro and rings an alarm before your stop, so you can rest on the way and ' +
     'still get off at the right place.</p>' +
-    '<p class="about__by">&mdash; ' + esc(MAKER) + ', maker of Vazhi</p>' +
+    '<p class="about__by">&mdash; ' + esc(MAKER) + ', maker of Idavazhi</p>' +
     '<section class="about__sec" aria-labelledby="about-fb-title">' +
     '  <h3 id="about-fb-title">Tell me what you think</h3>' +
     '  <p class="about__hint">A wrong route, a missing stop, an idea &mdash; I read every message.</p>' +
@@ -162,9 +162,9 @@ var ABOUT = (function () {
   /* ---------------------------------------------------- bus ticket */
 
   var ticket = dialog("ticket", "ticket-title",
-    '<p class="about__eyebrow">Support Vazhi</p>' +
+    '<p class="about__eyebrow">Support Idavazhi</p>' +
     '<h2 class="about__title ticket__title" id="ticket-title">' + TICKET_ICON + 'Buy me a bus ticket</h2>' +
-    '<p class="about__story">Vazhi is free and has no ads. If it ever saved you from missing your ' +
+    '<p class="about__story">Idavazhi is free and has no ads. If it ever saved you from missing your ' +
     'stop, a ticket helps keep its server running.</p>' +
     '<div class="ticket__amts" role="radiogroup" aria-label="Ticket">' +
     TICKETS.map(function (t) {
@@ -212,7 +212,7 @@ var ABOUT = (function () {
 
   function upiQuery(amt) {
     return "pa=" + support.upi + "&pn=" + encodeURIComponent(support.name) +
-           "&am=" + amt.toFixed(2) + "&cu=INR&tn=" + encodeURIComponent("Vazhi bus ticket");
+           "&am=" + amt.toFixed(2) + "&cu=INR&tn=" + encodeURIComponent("Idavazhi bus ticket");
   }
   function upiLink(amt) { return "upi://pay?" + upiQuery(amt); }
   function appLink(app, amt) {
@@ -221,7 +221,7 @@ var ABOUT = (function () {
   }
 
   // The QR code as an SVG: dark squares on white with a quiet margin, so any
-  // UPI app's scanner reads it on Vazhi's dark screen.
+  // UPI app's scanner reads it on Idavazhi's dark screen.
   function qrSvg(text) {
     var q = qrcode(0, "M");
     q.addData(text);
@@ -286,17 +286,17 @@ var ABOUT = (function () {
         var o = r[1];
         var rzp = new window.Razorpay({
           key: o.key, order_id: o.order_id, amount: o.amount, currency: o.currency,
-          name: "Vazhi", description: "A bus ticket for Vazhi's maker",
+          name: "Idavazhi", description: "A bus ticket for Idavazhi's maker",
           image: location.origin + "/icons/icon-192.png",
-          notes: { for: "Vazhi bus ticket" },
+          notes: { for: "Idavazhi bus ticket" },
           theme: { color: "#f5b642" },
           handler: function (res) {
             payNote("Checking your payment...");
             postJSON("/api/ticket/paid", res).then(function () {
               el("ticket-pay").innerHTML = '<div class="ticket__thanks"><b>Thank you!</b>' +
-                '<p>Your &#8377;' + rupees + ' bus ticket keeps Vazhi free for everyone.</p></div>';
+                '<p>Your &#8377;' + rupees + ' bus ticket keeps Idavazhi free for everyone.</p></div>';
             }).catch(function () {
-              payNote("Paid - thank you! (Vazhi couldn't confirm it just now, but Razorpay has your payment.)", "is-ok");
+              payNote("Paid - thank you! (Idavazhi couldn't confirm it just now, but Razorpay has your payment.)", "is-ok");
             });
           },
           modal: { ondismiss: function () { renderPay(); } }
@@ -357,7 +357,7 @@ var ABOUT = (function () {
               amount + '</b>.</p></div>' +
               '<p class="ticket__id">UPI ID: <b>' + esc(support.upi) + '</b>' +
               '<button type="button" class="ticket__copy" id="ticket-copy">Copy</button></p>' +
-              '<p class="ticket__note">Paid? Thank you! Every ticket keeps Vazhi running.</p>';
+              '<p class="ticket__note">Paid? Thank you! Every ticket keeps Idavazhi running.</p>';
     }
     if (support.link) {
       html += '<a class="ticket__card" href="' + esc(support.link) + '" target="_blank" rel="noopener">' +
@@ -415,8 +415,8 @@ var ABOUT = (function () {
     '</form>' +
     '<p class="about__msg" id="rate-msg" aria-live="polite"></p>' +
     '<section class="about__sec ticket rate__ticket" aria-labelledby="rate-tk-title">' +
-    '  <h3 id="rate-tk-title">' + TICKET_ICON + 'Did Vazhi wake you on time?</h3>' +
-    '  <p class="about__hint">Vazhi is free with no ads. A bus ticket for its maker keeps it that way.</p>' +
+    '  <h3 id="rate-tk-title">' + TICKET_ICON + 'Did Idavazhi wake you on time?</h3>' +
+    '  <p class="about__hint">Idavazhi is free with no ads. A bus ticket for its maker keeps it that way.</p>' +
     '  <button type="button" class="ticket__paybtn" id="rate-ticket">Buy me a bus ticket</button>' +
     '</section>',
     function (box) {

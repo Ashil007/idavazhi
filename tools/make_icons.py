@@ -1,4 +1,4 @@
-"""Draw Vazhi's app icons into web/icons/ (needs Pillow: pip install pillow).
+"""Draw Idavazhi's app icons into web/icons/ (needs Pillow: pip install pillow).
 
     python tools/make_icons.py
 

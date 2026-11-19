@@ -494,6 +494,49 @@ def _write(places, source, started, log):
     return True
 
 
+# Towns, cities, railway stations and bus stands: a bus stop named for one
+# is a big stop, where fast buses call too (Kalamassery, Aluva), unlike one
+# named for a neighbourhood. Metro stations are left out: every stop along
+# the line has one (Pathadipalam). Used by the planner to pick where a long
+# bus ride starts.
+HUB_KINDS = ("Town", "City", "Station", "Bus stand")
+HUB_NEAR_M = 3000          # the town or station this close to the stop
+HUB_SUFFIX = re.compile(r"\s+(junction|jn\.?|jct|kavala|bus\s*stop|stop|bus\s*stand|"
+                        r"stand|town|bus\s*station)$", re.I)
+_hubs = {"at": 0.0, "by": None}
+
+
+def _hub_index():
+    """{lowercase name: [(lat, lon), ...]} of the HUB_KINDS places, read once
+    (again after an hour); {} without a place index."""
+    now = time.time()
+    if _hubs["by"] is not None and now - _hubs["at"] < 3600:
+        return _hubs["by"]
+    by = {}
+    try:
+        db = sqlite3.connect("file:%s?mode=ro" % DB.replace("\\", "/"), uri=True)
+        try:
+            rows = db.execute("SELECT name, lat, lon FROM places WHERE kind IN (%s)"
+                              % ",".join("?" * len(HUB_KINDS)), HUB_KINDS).fetchall()
+        finally:
+            db.close()
+        for name, lat, lon in rows:
+            by.setdefault(name.strip().lower(), []).append((lat, lon))
+    except sqlite3.Error:
+        pass
+    _hubs.update(at=now, by=by)
+    return by
+
+
+def is_hub(name, lat, lon):
+    """Whether a stop called `name` at (lat, lon) is named for a town, city
+    or station near it ("Edappally Junction" -> Edappally)."""
+    if not name:
+        return False
+    key = HUB_SUFFIX.sub("", name.strip()).strip().lower()
+    return any(haversine(lat, lon, a, b) <= HUB_NEAR_M for a, b in _hub_index().get(key, ()))
+
+
 def _version():
     try:
         db = sqlite3.connect("file:%s?mode=ro" % DB.replace("\\", "/"), uri=True)

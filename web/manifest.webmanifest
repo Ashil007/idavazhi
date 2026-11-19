@@ -1,14 +1,14 @@
 {
-  "name": "Vazhi - bus, train and metro across Kerala",
-  "short_name": "Vazhi",
+  "name": "Idavazhi - bus, train and metro across Kerala",
+  "short_name": "Idavazhi",
   "description": "Door-to-door trips by bus, train and metro in Kerala, with an alarm before your stop.",
   "id": "/",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#11151c",
-  "theme_color": "#11151c",
+  "background_color": "#f6b73c",
+  "theme_color": "#f6b73c",
   "lang": "en-IN",
   "categories": ["travel", "navigation"],
   "icons": [

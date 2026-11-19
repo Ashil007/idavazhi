@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Set up (or update) Vazhi on a fresh Ubuntu server - an Oracle Cloud "Always
+# Set up (or update) Idavazhi on a fresh Ubuntu server - an Oracle Cloud "Always
 # Free" machine, for example. deploy/push.py copies the app here and runs it:
 #
 #     sudo DOMAIN=1-2-3-4.sslip.io bash setup.sh /tmp/vazhi.tar.gz
@@ -98,7 +98,7 @@ if [ -n "${SKIP_SYSTEM:-}" ]; then
 fi
 
 # 6. Service and web server -----------------------------------------------------
-log "Setting up the Vazhi service"
+log "Setting up the Idavazhi service"
 # One copy of the app per processor core (2 to 4): Python does its work on
 # one core per process, so more copies answer more people at once. The main
 # copy (port 8001) also downloads map data and builds the place index; the
@@ -127,7 +127,7 @@ EOF
 }
 cat > /etc/systemd/system/vazhi.service <<EOF
 [Unit]
-Description=Vazhi journey planner (main)
+Description=Idavazhi journey planner (main)
 After=network-online.target docker.service
 Wants=network-online.target
 
@@ -140,7 +140,7 @@ WantedBy=multi-user.target
 EOF
 cat > /etc/systemd/system/vazhi-worker@.service <<EOF
 [Unit]
-Description=Vazhi journey planner (extra copy on port %i)
+Description=Idavazhi journey planner (extra copy on port %i)
 After=vazhi.service
 
 [Service]
@@ -172,7 +172,7 @@ $DOMAIN {
 	# HTTPS only, from now on, for this site (the browser remembers).
 	header Strict-Transport-Security "max-age=31536000"
 	header -Server
-	# Nothing Vazhi accepts is anywhere near this big.
+	# Nothing Idavazhi accepts is anywhere near this big.
 	@big header_regexp Content-Length ^[0-9]{6,}$
 	respond @big "Request too large" 413
 	request_body {
@@ -202,7 +202,7 @@ for _ in $(seq 1 30); do
   curl -fsS -o /dev/null "http://127.0.0.1:$PORT/" && break
   sleep 2
 done
-log "Vazhi is up ($WORKERS copies): https://$DOMAIN/app"
+log "Idavazhi is up ($WORKERS copies): https://$DOMAIN/app"
 echo "(The HTTPS certificate can take a minute on the very first visit.)"
 
 # Backups: riders' data (bus times, stop names) every night at 3:30, the

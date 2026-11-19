@@ -1,4 +1,4 @@
-"""Automated live backup for Vazhi SQLite databases.
+"""Automated live backup for Idavazhi SQLite databases.
 
 Performs hot, lock-free backups using SQLite's native online backup API
 (conn.backup), so copies are 100% consistent even while riders are actively

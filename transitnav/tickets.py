@@ -7,7 +7,7 @@
 3. Razorpay hands the page a payment id and a signature; verify() checks the
    signature with the secret key, so a fake "paid" can't be recorded, and
    saves the ticket in data/feedback.db beside messages and ratings. The owner
-   gets a Telegram message, and sees it in Vazhi Messages (tools/inbox.py).
+   gets a Telegram message, and sees it in Idavazhi Messages (tools/inbox.py).
 
 The keys come from data/vazhi.env: VAZHI_RAZORPAY_KEY_ID and
 VAZHI_RAZORPAY_KEY_SECRET (test keys start rzp_test_, live keys rzp_live_).
@@ -74,7 +74,7 @@ def order(body: dict, client: str = "?") -> dict:
         made = _create_order(key_id, secret, {
             "amount": amount * 100, "currency": "INR",
             "receipt": "vazhi-%d" % int(time.time() * 1000),
-            "notes": {"for": "Vazhi bus ticket"}})
+            "notes": {"for": "Idavazhi bus ticket"}})
     except urllib.error.HTTPError as exc:
         print("razorpay order refused: HTTP %d" % exc.code, flush=True)   # no key in the log
         raise TicketError("Payments are not working right now. Please try again later.") from None
@@ -145,7 +145,7 @@ def send_waiting() -> int:
         for pid, amount, created in db.execute(
                 "SELECT payment_id, amount, created FROM tickets WHERE sent = 0 ORDER BY created").fetchall():
             when = time.strftime("%d %b %Y, %I:%M %p", time.localtime(created))
-            text = "Someone bought you a bus ticket on Vazhi%s!\n\n%s\n%s" % (
+            text = "Someone bought you a bus ticket on Idavazhi%s!\n\n%s\n%s" % (
                 (" (₹%d)" % amount) if amount else "", pid, when)
             if not feedback._telegram(token, chat, text):
                 break

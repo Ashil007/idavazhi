@@ -355,7 +355,7 @@ var ALERTS = (function () {
     if (siren) { siren.pause(); siren.currentTime = 0; }
     if (navigator.vibrate) navigator.vibrate(0);
     // ring() paused the silent background sound that keeps the page awake;
-    // start it again, or the phone may stop Vazhi before the next stop.
+    // start it again, or the phone may stop Idavazhi before the next stop.
     if (running && bgAudio) { try { bgAudio.play().catch(function () {}); } catch (e) {} }
   }
 
@@ -1153,7 +1153,7 @@ var ALERTS = (function () {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: title,
           artist: subtitle,
-          album: "Vazhi • Live Trip Alerts",
+          album: "Idavazhi • Live Trip Alerts",
           artwork: [
             { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
             { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" }
@@ -1195,7 +1195,7 @@ var ALERTS = (function () {
     if ("mediaSession" in navigator) {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: "Vazhi • Trip Alert Active",
+          title: "Idavazhi • Trip Alert Active",
           artist: "Wake me before " + dest,
           album: "Following your trip in background",
           artwork: [
@@ -1224,7 +1224,7 @@ var ALERTS = (function () {
 
     if (swReg && swReg.showNotification && Notification.permission === "granted") {
       try {
-        swReg.showNotification("Vazhi is following your ride", {
+        swReg.showNotification("Idavazhi is following your ride", {
           body: "Alarm set for " + dest + ". Active in background.",
           icon: "icons/icon-192.png",
           badge: "icons/favicon-32.png",

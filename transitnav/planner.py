@@ -18,9 +18,10 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
+from concurrent.futures import wait
 from itertools import product
 
-from . import fares, overpass, router, stopnames, timetable
+from . import busroutes, fares, overpass, places, router, stopnames, timetable
 from .config import (
     MODES,
     ACCESS_MARGIN_FACTOR,
@@ -92,6 +93,19 @@ MAP_WAIT_S = 45.0
 MIN_RIDE_M = 400.0
 # Extra distance an unnamed stop is charged when choosing where to board.
 UNNAMED_STOP_M = 150.0
+# A road option for a bus ride is kept only if this much of it runs along
+# OpenStreetMap's mapped bus routes (where the area has them).
+ROUTE_COVER = 0.85
+
+
+def _bus_routes(origin, destination, cfg, report=None, wait_s=busroutes.WAIT_S):
+    """The mapped bus routes around a bus trip (busroutes.py), or None: not
+    a bus, too long a trip, no routes mapped, or not downloaded in time."""
+    if cfg["vehicle"] != "bus" or haversine(
+            origin[0], origin[1], destination[0], destination[1]) > busroutes.MAX_TRIP_M:
+        return None
+    buffer_m = max(cfg["stop_search_radii"][-1], cfg["network_margin_m"])
+    return busroutes.graph(busroutes.tiles_for(origin, destination, buffer_m), report, wait_s)
 
 
 def _fetch_tiles(tiles, deg, build, report=None, what="map data"):
@@ -109,14 +123,466 @@ def _fetch_tiles(tiles, deg, build, report=None, what="map data"):
 
 
 def _keep_stops(stops, cfg):
-    """Drop stops a rider cannot use (see "skip_stop_names" in config)."""
+    """Drop stops a rider cannot use: "skip_stop_names" and "skip_stops" in
+    config and, for buses, stops riders have confirmed no bus runs at."""
     pattern = cfg.get("skip_stop_names")
-    if not pattern:
-        return stops
-    return [s for s in stops if not re.search(pattern, s.get("name") or "", re.I)]
+    skip = set(cfg.get("skip_stops") or ())
+    if cfg["vehicle"] == "bus":
+        skip |= stopnames.no_bus_keys()
+    return [s for s in stops if s.get("id") not in skip
+            and not (pattern and re.search(pattern, s.get("name") or "", re.I))]
 
 
-def _find_stops(origin, destination, cfg, acfg, report):
+# KSRTC or private: the rider can ask for either kind of bus. Idavazhi has no
+# bus routes, so whose buses call at a stop comes from riders' reports
+# ("private_only_stops" in config) and the operator, network and, for a bus
+# stand, the name on the map. Most stops say nothing: either may come.
+OPERATORS = {"any": "Any bus", "ksrtc": "KSRTC", "private": "Private"}
+OPERATOR_BUS = {"ksrtc": "KSRTC bus", "private": "Private bus"}
+_KSRTC_RE = re.compile(r"ksrtc|road transport corp|\bgovt\b|government|\bswift\b", re.I)
+_PRIVATE_RE = re.compile(r"private", re.I)
+
+
+def _stop_operators(stop, cfg):
+    """{"ksrtc"}, {"private"}, both, or None when nothing says. What riders
+    agree on ("Which buses stop here?", stopnames.py) comes first."""
+    said = stop.get("buses")
+    if said in ("private", "ksrtc"):
+        return {said}
+    if said == "both":
+        return {"ksrtc", "private"}
+    if stop.get("id") in (cfg.get("private_only_stops") or ()):
+        return {"private"}
+    text = " ".join(x for x in (stop.get("operator"), stop.get("network"),
+                                stop.get("name") if stop.get("kind") == "station" else None)
+                    if x)
+    found = set()
+    if _KSRTC_RE.search(text):
+        found.add("ksrtc")
+    if _PRIVATE_RE.search(text):
+        found.add("private")
+    return found or None
+
+
+def _serves(stop, operator, cfg):
+    """Whether `operator`'s buses may call at `stop` (yes when unknown)."""
+    if operator not in OPERATOR_BUS:
+        return True
+    ops = _stop_operators(stop, cfg)
+    return ops is None or operator in ops
+
+
+def _leg_operator(board, alight, operator, cfg):
+    """Whose bus a ride from `board` to `alight` is: "ksrtc", "private", or
+    None (either). The rider's choice, unless the stops say only the other
+    kind calls there (then the ride is by that kind, and a note says so)."""
+    known = [o for o in (_stop_operators(board, cfg), _stop_operators(alight, cfg)) if o]
+    served = set.intersection(*known) if known else None
+    if operator in OPERATOR_BUS and (not served or operator in served):
+        return operator
+    return next(iter(served)) if served and len(served) == 1 else None
+
+
+def _bus_name(operator):
+    """"KSRTC bus", "private bus" - for the middle of a sentence."""
+    return {"ksrtc": "KSRTC bus", "private": "private bus"}.get(operator, "bus")
+
+
+# Long bus trips start and end at bus stands: a long-distance bus does not
+# call at every roadside stop (no bus runs from Unnichira to Alappuzha).
+# Beyond the "intercity" distance the long ride goes from a stand near the
+# start to one near the destination, and a stand too far to walk to is
+# reached by a local bus (_with_buses).
+STAND_REACH_M = 25000      # how far from each end stands are looked for
+STAND_CANDIDATES = 3
+# The map often has one place twice (Vaikom "KSRTC Bus Stand" and "KSRTC Sub
+# Depot", 25 m apart): stands this close count once, so they do not take the
+# places of other stands (Cherthala, on the way) among the candidates.
+STAND_TWIN_M = 300
+LOCAL_BUS_KMH = 15.0       # a town bus, stops and all: to compare stands only
+LOCAL_WAIT_S = 600
+
+
+def _is_stand(stop, cfg):
+    """A bus stand. OSM also tags some roadside stops as stations, so the
+    name decides; a KSRTC depot named only for its town counts too."""
+    if stop.get("kind") != "station" or not stop.get("name"):
+        return False
+    if re.search(cfg.get("stand_names") or "$^", stop["name"], re.I):
+        return True
+    return _stop_operators(stop, cfg) == {"ksrtc"}
+
+
+def _reach_s(point, stop):
+    """A rough time from `point` to `stop`: on foot when it is close, else by
+    town bus with the wait. Only for comparing stands."""
+    d = haversine(point[0], point[1], stop["lat"], stop["lon"]) * DETOUR_FACTOR
+    bus = d / (LOCAL_BUS_KMH / 3.6) + LOCAL_WAIT_S
+    if d <= WALK_MAX_M:
+        # Whichever is quicker: a 2 km walk is slower than a short bus ride,
+        # and a stand just past walking distance is not nearer than it.
+        return min(d / (ACCESS_MODES["walk"]["speed_kmh"] / 3.6), bus)
+    return bus
+
+
+def _long_bus_stands(origin, destination, direct, stops, cfg, operator):
+    """The stands a long bus ride could start and end at: (near the origin,
+    near the destination), a few each, quickest to reach first; None when
+    one end has none."""
+    stands = [s for s in stops if _is_stand(s, cfg)]
+
+    def long_haul(s):
+        ops = _stop_operators(s, cfg)
+        if operator == "private":
+            # A stand the map calls private (Kaloor Private Bus Station);
+            # any other stand only when an end has none.
+            return bool(ops and "private" in ops)
+        # Long-distance buses are mostly KSRTC's: its stands, and the hubs.
+        return bool(ops and "ksrtc" in ops) or bool(re.search(r"mobility hub", s["name"], re.I))
+
+    def near(point, other):
+        out = []
+        for s in stands:
+            if haversine(point[0], point[1], s["lat"], s["lon"]) > STAND_REACH_M:
+                continue
+            # Not a stand behind the rider, away from where they are going.
+            if haversine(other[0], other[1], s["lat"], s["lon"]) > direct + 3000:
+                continue
+            out.append(dict(s, distance_m=0.0, reach_s=_reach_s(point, s)))
+        good = [s for s in out if long_haul(s)] or [s for s in out if _serves(s, operator, cfg)]
+        good.sort(key=lambda s: s["reach_s"])
+        kept = []
+        for s in good:
+            if not any(haversine(s["lat"], s["lon"], k["lat"], k["lon"]) <= STAND_TWIN_M
+                       for k in kept):
+                kept.append(s)
+        return kept[:STAND_CANDIDATES]
+
+    o, d = near(origin, destination), near(destination, origin)
+    return (o, d) if o and d else None
+
+
+# KSRTC buses keep to the main roads - national and state highways - and
+# their stands. A rider who asks for KSRTC boards it at a stop on one of
+# those (or a stop riders or the map say KSRTC calls at), reached on foot or
+# by a local bus, never at a lane-side stop only private buses use.
+KSRTC_ROADS = ("motorway", "trunk", "primary")
+KSRTC_REACH_M = 12000      # how far from each end KSRTC stops are looked for
+KSRTC_LOOK = 150           # nearest stops checked at each end
+# "Any bus" too: a bus from a stop on a small road runs a local route, not
+# one this long, so a longer trip rides the long stretch from main-road
+# stops (or stands), as KSRTC does. Shorter trips board wherever is nearest.
+ANY_LANE_MAX_M = 15000
+# Fast buses call only at the big stops - where main roads meet (Edappally:
+# NH 66 and NH 544), those named for a town or a railway station, and
+# stands - so a smaller main-road stop (Koonamthai) counts as this much
+# further away: a long ride starts at the big stop unless the small one
+# saves more than this.
+MINOR_STOP_S = 600
+
+
+def _ksrtc_stop(stop, road, cfg):
+    """Whether KSRTC buses are likely to call at `stop`, on a `road` class."""
+    ops = _stop_operators(stop, cfg)
+    if ops is not None:
+        return "ksrtc" in ops
+    return _is_stand(stop, cfg) or road in KSRTC_ROADS
+
+
+def _big_stop(stop, cfg):
+    """A stand, a stop riders or the map say KSRTC calls at, or one named for
+    a town, city, railway station or bus stand near it. (Where main roads
+    meet is checked by the caller, in one call for all the stops.)"""
+    return (_is_stand(stop, cfg) or "ksrtc" in (_stop_operators(stop, cfg) or ())
+            or places.is_hub(stop.get("name"), stop["lat"], stop["lon"]))
+
+
+def _fast_stop(stop, meeting, cfg):
+    """Whether fast buses are likely to call at `stop`: riders' word ("Do
+    fast buses stop here?") first, else a big stop or one where `meeting`
+    (2 or more) main roads meet."""
+    if stop.get("fast") in ("yes", "no"):
+        return stop["fast"] == "yes"
+    return (meeting or 0) >= 2 or _big_stop(stop, cfg)
+
+
+def _main_road_stop(stop, road, cfg):
+    """Whether a long "Any bus" ride can start or end at `stop`: a stand, a
+    stop on a main road, or one riders or the map say KSRTC calls at."""
+    return _is_stand(stop, cfg) or road in KSRTC_ROADS or "ksrtc" in (
+        _stop_operators(stop, cfg) or ())
+
+
+def _ksrtc_points(origin, destination, direct, stops, cfg, keep=None):
+    """Stops near each end a KSRTC ride can start and end at: (near the
+    origin, near the destination), quickest to reach first. None when the
+    route service cannot say which roads the stops are on, or an end has
+    none. `keep(stop, road, cfg)`: which stops count (default _ksrtc_stop)."""
+    keep = keep or _ksrtc_stop
+    def near(point, other):
+        cand = []
+        for s in stops:
+            d = haversine(point[0], point[1], s["lat"], s["lon"])
+            if d <= KSRTC_REACH_M and haversine(other[0], other[1], s["lat"], s["lon"]) <= direct + 3000:
+                cand.append((d, s))
+        cand.sort(key=lambda x: x[0])
+        cand = [s for _, s in cand[:KSRTC_LOOK]]
+        roads = router.road_classes([(s["lat"], s["lon"]) for s in cand])
+        if cand and all(r is None for r in roads):
+            return None
+        cand = [(s, r) for s, r in zip(cand, roads) if keep(s, r, cfg)]
+        meeting = router.main_roads_meeting([(s["lat"], s["lon"]) for s, _ in cand])
+        good = [dict(s, distance_m=0.0,
+                     reach_s=_reach_s(point, s) + (0 if _fast_stop(s, m, cfg) else MINOR_STOP_S))
+                for (s, _), m in zip(cand, meeting)]
+        good.sort(key=lambda s: s["reach_s"])
+        # The two sides of one road share a name: keep a choice of places.
+        out, seen = [], {}
+        for s in good:
+            n = (s.get("name") or s["id"]).lower()
+            if seen.get(n, 0) < 2:
+                seen[n] = seen.get(n, 0) + 1
+                out.append(s)
+        return out[:STAND_CANDIDATES]
+
+    o = near(origin, destination)
+    d = near(destination, origin) if o else None
+    return (o, d) if o and d else None
+
+
+def _from_stands(result, access, report, why=None):
+    """A stand-to-stand bus trip (and its other roads) with a local bus to
+    and from each stand that is too far to walk to. `why`: the note's
+    reason the trip starts with a local bus ("%s" is the stop)."""
+    options = [result] + list(result.get("alternatives") or [])
+
+    def local(option):
+        option = dict(option, alternatives=None)
+        return _with_buses(option, access, report) or option
+
+    with ThreadPoolExecutor(max_workers=len(options)) as pool:
+        done = list(pool.map(local, options))
+    for option in done:
+        option.pop("alternatives", None)
+        option.pop("combined", None)
+        legs = option["legs"]
+        # The local bus often stops right at the stand: no "walk 0 m" between.
+        option["legs"] = [l for n, l in enumerate(legs)
+                          if not (l["type"] == "walk" and l["distance_m"] < 30
+                                  and 0 < n < len(legs) - 1
+                                  and legs[n - 1]["type"] == legs[n + 1]["type"] == "transit")]
+        if not any(l.get("access") == "road" for l in option["legs"]):
+            # The far ends are real buses now, not "bus or auto-rickshaw".
+            option["warnings"] = [w for w in option.get("warnings") or []
+                                  if not w["title"].startswith("The bus stop is far from")]
+        rides = [l for l in option["legs"] if l["type"] == "transit"]
+        main = max(rides, key=lambda l: l["distance_m"])
+        if rides[0] is not main:
+            option["notes"] = [(why or "Long-distance buses leave from bus stands, not from "
+                                       "every stop, so this trip starts with a local bus to %s.")
+                               % _stop_label(main["from"], MODES["bus"])] + option["notes"]
+    best = done[0]
+    best["alternatives"] = done[1:]
+    return best
+
+
+# A long bus ride from a stop on the smaller roads is two buses, not one:
+# long-distance buses keep to the main roads (national and state highways,
+# KSRTC_ROADS), while the buses on a road like Edappally-Pukkattupady Road
+# run local routes. Where a long ride's line runs a good stretch on smaller
+# roads before it reaches the main roads for good (or after it leaves
+# them), the ride is split at a stop where the two meet - a local bus to
+# Edappally, then the long-distance bus from there - and a note says so.
+LOCAL_STRETCH_M = 1500     # this much on smaller roads at one end needs a local bus
+MAIN_CROSSING_M = 400      # a main road followed for less than this is only crossed
+LOCAL_ZONE_M = 15000       # how far into a ride the local stretch may end
+CHANGE_NEAR_M = 600        # the change stop: this close to where the roads meet...
+CHANGE_ON_LINE_M = 60      # ...and this close to the bus line
+LONG_PART_MIN = 0.5        # the long-distance part keeps at least this share of the ride
+# Whose buses a stretch is by, from OpenStreetMap's mapped routes: the kind
+# whose routes run along this much of it (when the other kind's do not).
+OPERATOR_COVER = 0.75
+
+
+def _local_stretch(coords):
+    """(metres from the start of `coords` to where the line joins the main
+    roads after LOCAL_STRETCH_M or more on smaller ones, the main name of
+    those smaller roads), or None: the line starts on main roads, or the
+    road types are unknown."""
+    cum = [0.0]
+    for p, q in zip(coords, coords[1:]):
+        cum.append(cum[-1] + haversine(p[0], p[1], q[0], q[1]))
+    head = [c for c, m in zip(coords, cum) if m <= LOCAL_ZONE_M + 3000]
+    runs = router.road_runs(head) if len(head) > 1 else None
+    if not runs:
+        return None
+    at, start, names, found = 0.0, None, {}, None
+    for cls, metres, name in runs:
+        if cls in KSRTC_ROADS and metres >= MAIN_CROSSING_M:
+            if start is not None and at - start >= LOCAL_STRETCH_M and at <= LOCAL_ZONE_M:
+                named = {n: m for n, m in names.items() if n}
+                found = (at, max(named, key=named.get) if named else None)
+            start = None
+        else:
+            if start is None:
+                start, names = at, {}
+            names[name] = names.get(name, 0.0) + metres
+        at += metres
+    return found
+
+
+def _change_stop(coords, cum, at_m, all_stops, cfg, at_start, exclude):
+    """The stop to change buses at, near `at_m` metres along the line: a
+    stop on the line, a big one (where fast buses call) first, on the main
+    road's side of the junction first, then the nearest. Returns (stop,
+    segment index, fraction along it, metres along the line) or None."""
+    lo = next((i for i, m in enumerate(cum) if m >= at_m - 2 * CHANGE_NEAR_M), 1)
+    hi = next((i for i, m in enumerate(cum) if m > at_m + 2 * CHANGE_NEAR_M), len(cum) - 1)
+    lo, hi = max(1, lo), max(1, hi)
+    found = []
+    for s in all_stops:
+        if s["id"] in exclude or s.get("kind") == "platform":
+            continue
+        best = None
+        for i in range(lo, hi + 1):
+            a, b = coords[i - 1], coords[i]
+            dist, t = point_to_segment_m(s["lat"], s["lon"], a[0], a[1], b[0], b[1])
+            if best is None or dist < best[0]:
+                best = (dist, i, t, cum[i - 1] + (cum[i] - cum[i - 1]) * t)
+        if best and best[0] <= CHANGE_ON_LINE_M and abs(best[3] - at_m) <= CHANGE_NEAR_M:
+            found.append((s,) + best[1:])
+    if not found:
+        return None
+    meeting = router.main_roads_meeting([(s["lat"], s["lon"]) for s, *_ in found])
+
+    def key(item):
+        (s, _i, _t, along), m = item
+        side = along < at_m - 100 if at_start else along > at_m + 100
+        return (not _fast_stop(s, m, cfg), side, abs(along - at_m))
+    return min(zip(found, meeting), key=key)[0]
+
+
+def _whose(routes, coords):
+    """"ksrtc" or "private" when only that kind's mapped routes run along
+    `coords`, else None."""
+    share = busroutes.operator_share(routes, coords)
+    if not share:
+        return None
+    good = [op for op, v in share.items() if v >= OPERATOR_COVER]
+    return good[0] if len(good) == 1 else None
+
+
+def _split_local_ends(option, all_stops, cfg):
+    """`option` with its long bus ride split where it needs a local bus at
+    either end (see LOCAL_STRETCH_M). Changes `option` in place. Only a
+    long-distance ride: town and mofussil buses do run the smaller roads."""
+    long_m = (cfg.get("intercity") or {}).get("from_m", ANY_LANE_MAX_M)
+    for at_start in (True, False):
+        legs = option["legs"]
+        rides = [n for n, l in enumerate(legs) if l["type"] == "transit" and l.get("mode") == "bus"]
+        if not rides:
+            return option
+        n = max(rides, key=lambda k: legs[k]["distance_m"])
+        leg = legs[n]
+        coords = [list(p) for p in leg["geometry"]]
+        if leg["distance_m"] < long_m or len(coords) < 3:
+            continue
+        cum = [0.0]
+        for p, q in zip(coords, coords[1:]):
+            cum.append(cum[-1] + haversine(p[0], p[1], q[0], q[1]))
+        stretch = _local_stretch(coords if at_start else coords[::-1])
+        if stretch is None:
+            continue
+        at_m = stretch[0] if at_start else cum[-1] - stretch[0]
+        exclude = {leg["from"]["id"], leg["to"]["id"]}
+        change = _change_stop(coords, cum, at_m, all_stops, cfg, at_start, exclude)
+        if change is None:
+            continue
+        stop, i, t, along = change
+        local_m = along if at_start else cum[-1] - along
+        if local_m < LOCAL_STRETCH_M or cum[-1] - local_m < LONG_PART_MIN * cum[-1]:
+            continue
+        a, b = coords[i - 1], coords[i]
+        point = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+        first, second = coords[:i] + [point], [point] + coords[i:]
+        scale = leg["distance_m"] / cum[-1] if cum[-1] else 1.0
+        m1 = along * scale
+        m2 = leg["distance_m"] - m1
+        moving_s = max(0.0, leg["duration_s"] - leg["wait_s"])
+        local_geo = first if at_start else second
+        routes = busroutes.graph(busroutes.tiles_for(local_geo[0], local_geo[-1], 1000),
+                                 wait_s=3)
+        local_op = _whose(routes, local_geo)
+        long_op = leg.get("operator")
+        stop = dict(stop, distance_m=0.0)
+        stop.pop("reach_s", None)
+        same = (stop.get("name") or "").strip().lower()
+        passed = [s for s in leg.get("stops_passed") or []
+                  if (s.get("name") or "").strip().lower() != same or not same]
+
+        def part(geo, metres, frm, to, op, wait_s, stops):
+            out = dict(leg, geometry=geo, distance_m=metres, wait_s=wait_s,
+                       duration_s=moving_s * metres / leg["distance_m"] + wait_s,
+                       stops_passed=stops, operator=op, changes=[],
+                       label="%s from %s to %s" % (OPERATOR_BUS.get(op, cfg["label"]),
+                                                   _stop_label(frm, cfg), _stop_label(to, cfg)))
+            out["from"], out["to"] = frm, to
+            return out
+        before = [s for s in passed if s.get("along_m", 0) < along]
+        after = [dict(s, along_m=s.get("along_m", 0) - along) for s in passed
+                 if s.get("along_m", 0) > along]
+        local_wait = cfg["wait_s"]
+        if at_start:
+            one = part(first, m1, leg["from"], stop, local_op, local_wait, before)
+            two = part(second, m2, stop, leg["to"], long_op, leg["wait_s"], after)
+            two["duration_s"] += TRANSFER_WALK_S
+            one.pop("via", None)
+        else:
+            one = part(first, m1, leg["from"], stop, long_op, leg["wait_s"], before)
+            two = part(second, m2, stop, leg["to"], local_op, local_wait, after)
+            two["duration_s"] += TRANSFER_WALK_S
+            two.pop("via", None)
+        option["legs"] = legs[:n] + [one, two] + legs[n + 1:]
+        option["summary"] = _summarise(option, option["legs"])
+        road = ("the buses on %s" % stretch[1]) if stretch[1] else "the buses on the smaller roads here"
+        long_bus = (_bus_name(long_op) if long_op else "long-distance bus")
+        where = _stop_label(stop, cfg)
+        if at_start:
+            text = ("No single bus is known to run this whole way: %s run local routes, and "
+                    "long-distance buses keep to the main roads. So take a %s to %s and change "
+                    "there to a %s." % (road, _bus_name(local_op), where, long_bus))
+        else:
+            text = ("No single bus is known to run this whole way: long-distance buses keep "
+                    "to the main roads, and %s run local routes. So get off the %s at %s and "
+                    "change to a %s for the last stretch." % (road, long_bus, where,
+                                                            _bus_name(local_op)))
+        if not long_op:
+            text += " Most long-distance buses are KSRTC's."
+        # Shown up top, not among the notes: the rider must know to change.
+        option["warnings"] = [{"title": "Change buses at %s" % where, "text": text}] + list(
+            option.get("warnings") or [])
+    return option
+
+
+def _operator_notes(option, operator):
+    """Says so when the rider asked for KSRTC or private and a ride is by the
+    other kind, because only that kind calls at its stop."""
+    if operator not in OPERATOR_BUS:
+        return option
+    cfg = MODES["bus"]
+    for leg in option["legs"]:
+        if leg["type"] != "transit" or leg.get("mode") != "bus":
+            continue
+        other = leg.get("operator")
+        if other in OPERATOR_BUS and other != operator:
+            stop = leg["from"] if _stop_operators(leg["from"], cfg) == {other} else leg["to"]
+            option["notes"] = ["Only %ses stop at %s, so that ride is by %s."
+                               % (_bus_name(other), _stop_label(stop, cfg), _bus_name(other))
+                               ] + list(option.get("notes") or [])
+    return option
+
+
+def _find_stops(origin, destination, cfg, acfg, report, operator="any"):
     """One Overpass call gives every stop of this mode in the travel corridor.
 
     Querying the whole corridor rather than two `around:` circles means the same
@@ -125,6 +591,7 @@ def _find_stops(origin, destination, cfg, acfg, report):
     """
     buffer_m = max(cfg["stop_search_radii"][-1], cfg["network_margin_m"])
     report("stops", "Finding every %s along the way" % cfg["stop_noun"])
+    routes = _bus_routes(origin, destination, cfg, report)
     tiles = overpass.tiles_for_corridor(origin, destination, buffer_m, cfg["tile_deg"])
     data = _fetch_tiles(
         tiles, cfg["tile_deg"],
@@ -134,6 +601,10 @@ def _find_stops(origin, destination, cfg, acfg, report):
     stops = _keep_stops(stopnames.apply(
         overpass.parse_stops(data),
         bbox_around([origin, destination], buffer_m) if cfg["vehicle"] == "bus" else None), cfg)
+    if cfg["vehicle"] == "bus" and operator in OPERATOR_BUS:
+        # Only the stops the rider's kind of bus may call at - unless none is
+        # left, when the plan says the ride is by the other kind.
+        stops = [s for s in stops if _serves(s, operator, cfg)] or stops
     if not stops:
         raise PlanError(
             "The map has no %ss anywhere near this route yet. Try another way to "
@@ -163,6 +634,15 @@ def _find_stops(origin, destination, cfg, acfg, report):
                 item["distance_m"] = d
                 scored.append(item)
         scored.sort(key=lambda s: s["distance_m"])
+        if routes is not None and busroutes.has_data(routes, point):
+            # Where bus routes are mapped, a stop no route passes (one drawn
+            # on a lane no bus takes) is not boarded: the nearest stops a
+            # route does pass are. Bus stands, and stops riders say buses
+            # call at, count either way.
+            on_route = [s for s in scored if busroutes.served(routes, s) or _is_stand(s, cfg)
+                        or s.get("buses")]
+            if on_route:
+                scored = on_route
         scored = scored[:STOP_SHORTLIST]
         real = router.distances(point, [(s["lat"], s["lon"]) for s in scored],
                               acfg["router"], inbound, ACCESS_SNAP_RADIUS_M)
@@ -390,7 +870,9 @@ def _usable_pairs(origin_stops, dest_stops):
     pairs = [(a, b) for a, b in product(origin_stops, dest_stops)
              if a["id"] != b["id"] and a["distance_m"] + b["distance_m"] < float("inf")
              and haversine(a["lat"], a["lon"], b["lat"], b["lon"]) >= MIN_RIDE_M]
-    pairs.sort(key=lambda p: p[0]["distance_m"] + p[1]["distance_m"])
+    # Bus stands (long trips) carry a time to reach them instead of a distance.
+    pairs.sort(key=lambda p: p[0].get("reach_s", p[0]["distance_m"])
+               + p[1].get("reach_s", p[1]["distance_m"]))
     return pairs
 
 
@@ -493,12 +975,92 @@ def _route_transit(graph, origin_stops, dest_stops, cfg, report, access_mps):
     return board, alight, coords, ride_m, skipped, changes
 
 
-def _route_bus_fast(origin_stops, dest_stops, cfg, report, access_mps):
+FAST_PAIRS = 4             # stop pairs the street router is asked about at once
+
+# Mapped bus routes are preferred to the street router's line because the
+# router cuts through lanes no bus takes. But the map's routes have gaps: from
+# Thuravoor to Cherthala stand only the Vayalar road has routes drawn, so the
+# line left NH 66 at Pattanakkad, while buses keep to NH 66 and turn in at
+# X-Ray Junction. Where the router's line keeps to main roads and the mapped
+# one leaves them, the router's line is the bus's road.
+MAIN_ROAD_MIN = 0.6        # share of the router's line on main roads, at least
+MAIN_ROAD_GAIN = 0.2       # and this much more than the mapped line's
+MAIN_ROAD_MIN_M = 5000     # shorter rides: the mapped routes decide
+MAIN_ROAD_SAMPLE_M = 250   # road type checked about this often along a line
+MAIN_ROAD_SAMPLES = 80
+DETOUR_FACTOR_MAIN = 1.3   # the main-road line may be this much longer
+DETOUR_EXTRA_MAIN_M = 2000
+# ...but not much shorter: then it is another way altogether, not the same
+# trip round a gap in the map (Kaloor to Fort Kochi: 9 km by the Vypin ferry
+# against the buses' 16 km via Thoppumpady; Aluva to Vyttila: buses mapped
+# via the Edappally bypass, 3.7 km longer than the router's road).
+SHORTER_MAIN = 0.85
+
+
+def _main_road_share(coords):
+    """The share (0..1) of a line on main roads (KSRTC_ROADS), from the road
+    type at points along it; None when the route service cannot say."""
+    total = path_length(coords)
+    if total <= 0:
+        return None
+    step = max(MAIN_ROAD_SAMPLE_M, total / MAIN_ROAD_SAMPLES)
+    points, run = [tuple(coords[0])], 0.0
+    for p, q in zip(coords, coords[1:]):
+        run += haversine(p[0], p[1], q[0], q[1])
+        if run >= step:
+            points.append(tuple(q))
+            run = 0.0
+    classes = router.road_classes(points)
+    known = [c for c in classes if c]
+    if len(known) < len(points) * 0.6:
+        return None
+    return sum(c in KSRTC_ROADS for c in known) / len(known)
+
+
+def _main_road_wins(street, street_m, mapped, mapped_m):
+    """Whether the street router's line (`street`) is the bus's road rather
+    than the line along the mapped routes (`mapped`): see MAIN_ROAD_MIN."""
+    if (street_m < MAIN_ROAD_MIN_M or street_m < mapped_m * SHORTER_MAIN
+            or street_m > mapped_m * DETOUR_FACTOR_MAIN + DETOUR_EXTRA_MAIN_M):
+        return False
+    s = _main_road_share(street)
+    if s is None or s < MAIN_ROAD_MIN:
+        return False
+    m = _main_road_share(mapped)
+    return m is not None and s - m >= MAIN_ROAD_GAIN
+
+
+def _spread_pairs(pairs, n):
+    """The first `n` of `pairs` (quickest to reach first), but every boarding
+    and every alighting stop in at least one while there is room: the quickest
+    stand to reach (Vaikom) is no use if its ride goes the long way round, and
+    the next one (Cherthala, on the way) must be traced too."""
+    picked = []
+    # Every boarding stop first, then every alighting stop, then the rest.
+    for end in (0, 1, None):
+        seen = {p[end]["id"] for p in picked} if end is not None else set()
+        for p in pairs:
+            if len(picked) >= n:
+                break
+            if any(p is q for q in picked) or (end is not None and p[end]["id"] in seen):
+                continue
+            picked.append(p)
+            if end is not None:
+                seen.add(p[end]["id"])
+    order = {id(p): i for i, p in enumerate(pairs)}
+    return sorted(picked, key=lambda p: order[id(p)])
+
+
+def _route_bus_fast(origin_stops, dest_stops, cfg, report, access_mps, routes=None):
     """The bus leg from the street router: well under a second, against a
     city-sized road download. The closest few stop pairs are routed at once
-    and the quickest door to door wins. Returns what `_route_transit` does,
-    or None to fall back to it."""
-    pairs = _usable_pairs(origin_stops, dest_stops)[:4]
+    and the quickest door to door wins - a pair joined by OpenStreetMap's
+    mapped bus routes (`routes`, busroutes.py) before any other, its line
+    drawn along them (or a line along main roads where the mapped one
+    leaves them: _main_road_wins). Returns what `_route_transit` does plus
+    whether the line is one of those two (a bus road to trust), or None to
+    fall back to it."""
+    pairs = _spread_pairs(_usable_pairs(origin_stops, dest_stops), FAST_PAIRS)
     report("route", "Tracing the bus route between stops")
     with ThreadPoolExecutor(max_workers=4) as pool:
         found = list(pool.map(
@@ -507,17 +1069,30 @@ def _route_bus_fast(origin_stops, dest_stops, cfg, report, access_mps):
     best = None
     for (board, alight), hit in zip(pairs, found):
         if hit is not None:
-            coords, kept = _no_overshoot(hit[0], board, alight)
-            metres = hit[1] * kept
-            road_s = None if hit[2] is None else hit[2] * kept
-            secs = ((board["distance_m"] + alight["distance_m"]) / access_mps
+            coords, metres, road_s = hit
+            on = busroutes.path(routes, (board["lat"], board["lon"]),
+                                (alight["lat"], alight["lon"]), metres)
+            main_road = on is not None and _main_road_wins(coords, metres, on[0], on[1])
+            if main_road:
+                on = None
+            if on is not None:
+                # The router's time, for the length the bus really rides.
+                road_s = None if road_s is None or not metres else road_s * on[1] / metres
+                coords, metres = on
+            coords, kept = _no_overshoot(coords, board, alight)
+            metres *= kept
+            road_s = None if road_s is None else road_s * kept
+            secs = (sum(s["reach_s"] if "reach_s" in s else s["distance_m"] / access_mps
+                        for s in (board, alight))
                     + _bus_ride_seconds(cfg, metres, road_s))
-            if best is None or secs < best[0]:
-                best = (secs, board, alight, coords, metres, road_s)
+            trusted = on is not None or main_road
+            key = (not trusted, secs)
+            if best is None or key < best[0]:
+                best = (key, board, alight, coords, metres, road_s, trusted)
     if best is None:
         return None
-    _, board, alight, coords, metres, road_s = best
-    return board, alight, coords, metres, 0, [], road_s
+    _, board, alight, coords, metres, road_s, on_route = best
+    return board, alight, coords, metres, 0, [], road_s, on_route
 
 
 def _bus_ride_seconds(cfg, ride_m, road_s, n_stops=0):
@@ -1219,37 +1794,257 @@ def _plan_timetable(origin, destination, direct, mode, cfg, acfg, access, report
     return best
 
 
-def _bus_options(result, cfg, all_stops, board, alight, wait_s, report):
+# Each road option is boarded where it suits it best: another road may pass
+# closer to the rider than the stop the first option boards at (a bus that
+# loops back past the rider's door is boarded on the loop, not at its start).
+REBOARD_REACH_M = 1200     # a stop this far from the rider's start/end, as the crow flies
+REBOARD_ON_LINE_M = 60     # ...and this close to the option's bus line
+REBOARD_TRIES = 3          # walking routes asked for, the most promising stops first
+REBOARD_GAIN_S = 60        # a new stop must save at least this much door to door
+REBOARD_DETOUR = 1.2       # walk length / crow distance, for picking which stops to route
+# A stretch of the ride that ends less than this much nearer the other end
+# of the ride than it began has got the rider nowhere.
+REBOARD_PROGRESS_M = 200
+REBOARD_IDLE_WEIGHT = 1.5  # ...and its minutes count this many times over
+REBOARD_EXTRA_WALK_M = 600 # a new stop adds at most this much walking
+REBOARD_MIN_SKIP_M = 500   # ...and must take at least this much off the ride
+REBOARD_TIP_S = 240        # a stop on a loop this close to as quick is mentioned in a note
+
+
+def _stops_on_line(coords, cum, all_stops, cfg, routes, point, at_start, exclude):
+    """Stops near `point` on the bus line `coords` (in its first half at the
+    start, its last half at the end): (stop, segment index, fraction, metres
+    along, metres from `point` as the crow flies)."""
+    total = cum[-1]
+    out = []
+    for s in all_stops:
+        if s["id"] in exclude or s.get("kind") == "platform":
+            continue
+        crow = haversine(point[0], point[1], s["lat"], s["lon"])
+        if crow > REBOARD_REACH_M:
+            continue
+        if (routes is not None and busroutes.has_data(routes, (s["lat"], s["lon"]))
+                and not (busroutes.served(routes, s) or _is_stand(s, cfg) or s.get("buses"))):
+            continue
+        best = None
+        for i in range(1, len(coords)):
+            a, b = coords[i - 1], coords[i]
+            dist, t = point_to_segment_m(s["lat"], s["lon"], a[0], a[1], b[0], b[1])
+            if best is None or dist < best[0]:
+                best = (dist, i, t)
+        if best is None or best[0] > REBOARD_ON_LINE_M:
+            continue
+        i, t = best[1], best[2]
+        along = cum[i - 1] + (cum[i] - cum[i - 1]) * t
+        if (along <= total / 2) if at_start else (along >= total / 2):
+            out.append((s, i, t, along, crow))
+    return out
+
+
+def _reboard(legs, n_transit, alt, cfg, all_stops, routes):
+    """The walk legs and the bus line of one road option, with the bus
+    boarded (and left) at the stop on this road that is quickest door to
+    door. `alt` is the option's road ({"coords", "metres", "seconds"}).
+    Returns (legs, alt, tips) - the same legs and road when no stop does
+    better; `tips` are warnings ({"title", "text"}) for a stop on a loop
+    that is about as quick."""
+    tips = []
+    wcfg = access_config("walk")
+    walk_mps = wcfg["speed_kmh"] / 3.6
+    for at_start in (True, False):
+        n_walk = n_transit - 1 if at_start else n_transit + 1
+        walk = legs[n_walk] if 0 <= n_walk < len(legs) else None
+        if (walk is None or walk.get("type") != "walk" or walk.get("access") != "walk"
+                or len(walk.get("geometry") or ()) < 2 or len(alt["coords"]) < 3):
+            continue
+        leg = legs[n_transit]
+        coords = [list(p) for p in alt["coords"]]
+        cum = [0.0]
+        for p, q in zip(coords, coords[1:]):
+            cum.append(cum[-1] + haversine(p[0], p[1], q[0], q[1]))
+        total = cum[-1]
+        if not total:
+            continue
+        point = tuple(walk["geometry"][0] if at_start else walk["geometry"][-1])
+        exclude = {leg["from"]["id"], leg["to"]["id"]}
+        found = _stops_on_line(coords, cum, all_stops, cfg, routes, point, at_start, exclude)
+        # The same stop mapped twice (one pole each side of the road) is no
+        # other stop; nor is one a few steps along the line.
+        names = {(leg[k].get("name") or "").strip().lower() for k in ("from", "to")} - {""}
+        found = [f for f in found
+                 if (f[0].get("name") or "").strip().lower() not in names
+                 and (f[3] if at_start else total - f[3]) >= REBOARD_MIN_SKIP_M]
+
+        far = coords[-1] if at_start else coords[0]       # the other end of the ride
+        here = coords[0] if at_start else coords[-1]
+        far_now = haversine(here[0], here[1], far[0], far[1])
+
+        def saved(f):
+            # (the ride time this stop takes off the bus leg, whether that
+            # stretch of the ride gets no nearer the other end - a bus that
+            # loops back past the rider)
+            along = f[3]
+            part = along / total if at_start else (total - along) / total
+            secs = None if alt["seconds"] is None else alt["seconds"] * part
+            ride = _bus_ride_seconds(cfg, alt["metres"] * part, secs)
+            s = f[0]
+            idle = haversine(s["lat"], s["lon"], far[0], far[1]) >= far_now - REBOARD_PROGRESS_M
+            return ride, idle
+
+        def weighed(f, walk_s):
+            # Door to door, with time on a bus going nowhere counted extra.
+            ride, idle = saved(f)
+            return walk_s - ride * (REBOARD_IDLE_WEIGHT if idle else 1.0)
+        guess = sorted((f for f in found
+                        if weighed(f, f[4] * REBOARD_DETOUR / walk_mps)
+                        < walk["duration_s"] + REBOARD_TIP_S),
+                       key=lambda f: weighed(f, f[4] * REBOARD_DETOUR / walk_mps))
+        seen, picked = set(), []
+        for f in guess:                   # one try per stop, not per pole
+            name = (f[0].get("name") or "").strip().lower() or f[0]["id"]
+            if name not in seen:
+                seen.add(name)
+                picked.append(f)
+        guess = picked[:REBOARD_TRIES]
+        if not guess:
+            continue
+
+        def walk_to(f):
+            s = f[0]
+            stop_pt = (s["lat"], s["lon"])
+            if at_start:
+                return _access_leg_fast("walk", wcfg, point, stop_pt,
+                                        "%s to %s" % (wcfg["verb"], _stop_label(s, cfg)))
+            return _access_leg_fast("walk", wcfg, stop_pt, point,
+                                    "%s to your destination" % wcfg["verb"])
+        with ThreadPoolExecutor(max_workers=len(guess)) as pool:
+            walks = list(pool.map(walk_to, guess))
+        best = tip = None
+        for f, w in zip(guess, walks):
+            if w is None or w["distance_m"] > WALK_MAX_M:
+                continue
+            cost = weighed(f, w["duration_s"])
+            if (w["distance_m"] <= walk["distance_m"] + REBOARD_EXTRA_WALK_M
+                    and cost <= walk["duration_s"] - REBOARD_GAIN_S
+                    and (best is None or cost < best[0])):
+                best = (cost, f, w)
+            ride, idle = saved(f)
+            if (idle and w["distance_m"] <= walk["distance_m"] + REBOARD_EXTRA_WALK_M
+                    and (tip is None or cost < tip[0])):
+                tip = (cost, f, w, ride)
+        if best is None:
+            # Not quicker - but where the bus loops back past the rider, say
+            # that catching it on the loop is about as quick.
+            if tip is not None and tip[2]["duration_s"] - tip[3] <= walk["duration_s"] + REBOARD_TIP_S:
+                _, f, w, ride = tip
+                where = _stop_label(f[0], cfg)
+                if at_start:
+                    tips.append({"title": "You can skip the loop", "text":
+                                 "This bus first heads away and then comes back past you. You can "
+                                "instead walk %s to %s and catch it there: %s more walking, "
+                                "%s less on the bus." % (
+                                    format_distance(w["distance_m"]), where,
+                                    format_duration(max(60, w["duration_s"] - walk["duration_s"])),
+                                    format_duration(max(60, ride)))})
+                else:
+                    tips.append({"title": "You can skip the loop", "text":
+                                 "This bus goes past your destination and then comes back. You "
+                                "can instead get off at %s and walk %s: %s more walking, %s less "
+                                "on the bus." % (
+                                    where, format_distance(w["distance_m"]),
+                                    format_duration(max(60, w["duration_s"] - walk["duration_s"])),
+                                    format_duration(max(60, ride)))})
+            continue
+        _, (stop, i, t, along, _crow), new_walk = best
+        a, b = coords[i - 1], coords[i]
+        cut = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+        part = (total - along) / total if at_start else along / total
+        coords = [cut] + coords[i:] if at_start else coords[:i] + [cut]
+        alt = dict(alt, coords=coords, metres=alt["metres"] * part,
+                   seconds=None if alt["seconds"] is None else alt["seconds"] * part)
+        stop = dict(stop, distance_m=new_walk["distance_m"])
+        stop.pop("reach_s", None)
+        legs = list(legs)
+        legs[n_walk] = new_walk
+        legs[n_transit] = dict(leg, **{"from" if at_start else "to": stop})
+    return legs, alt, tips
+
+
+def _tag_operators(option):
+    """Each bus leg whose operator is not known from its stops: "ksrtc" or
+    "private" when only that kind's mapped routes (busroutes.py) run along
+    it, with its label to match. Changes `option` in place."""
+    cfg = None
+    for leg in option.get("legs") or ():
+        if (leg.get("type") != "transit" or leg.get("mode") != "bus" or leg.get("operator")
+                or leg.get("approximate") or len(leg.get("geometry") or ()) < 2):
+            continue
+        geo = leg["geometry"]
+        if haversine(geo[0][0], geo[0][1], geo[-1][0], geo[-1][1]) > busroutes.MAX_TRIP_M:
+            continue
+        routes = busroutes.graph(busroutes.tiles_for(tuple(geo[0]), tuple(geo[-1]), 1000),
+                                 wait_s=3)
+        op = _whose(routes, geo)
+        if op:
+            cfg = cfg or mode_config("bus")
+            leg["operator"] = op
+            leg["label"] = "%s from %s to %s" % (OPERATOR_BUS[op], _stop_label(leg["from"], cfg),
+                                                 _stop_label(leg["to"], cfg))
+    return option
+
+
+def _bus_options(result, cfg, all_stops, board, alight, wait_s, report, routes=None,
+                 on_route=False, road_s=None):
     """Like a map app: the bus ride along up to MAX_OPTIONS different roads
     between the same two stops, each a complete plan labelled by its main
     road ("via NH 66"), fastest door to door first. The rest ride along as
     `alternatives`. Without a Valhalla server answering, the plan is
-    returned as it is."""
+    returned as it is.
+
+    Where OpenStreetMap has bus routes mapped (`routes`), a road option is
+    kept only if it runs along them (ROUTE_COVER), and the ride along the
+    mapped routes (`on_route`: the plan's own line) is always one."""
     report("route", "Looking for other roads the bus could take")
     found = router.route_alternatives((board["lat"], board["lon"]), (alight["lat"], alight["lon"]),
                                       cfg["router"], cfg["snap_radius_m"] * 2, MAX_OPTIONS - 1)
+    n_transit = next(i for i, l in enumerate(result["legs"]) if l["type"] == "transit")
+    if routes is not None:
+        good = [alt for alt in found
+                if (busroutes.coverage(routes, alt["coords"]) or 0) >= ROUTE_COVER]
+        if on_route:
+            line = result["legs"][n_transit]
+            main = {"coords": line["geometry"], "metres": line["distance_m"],
+                    "seconds": road_s, "via": None}
+            matched = router.trace(line["geometry"], cfg["router"])
+            if matched is not None:
+                main["via"] = matched["via"]
+                if matched["seconds"] and matched["metres"]:
+                    main["seconds"] = matched["seconds"] * line["distance_m"] / matched["metres"]
+            found = [main] + [alt for alt in good if alt["via"] != main["via"]][:MAX_OPTIONS - 1]
+        elif good:
+            found = good
     if not found:
         return result
-    n_transit = next(i for i, l in enumerate(result["legs"]) if l["type"] == "transit")
     options = []
     for k, alt in enumerate(found):
         coords, kept = _no_overshoot(alt["coords"], board, alight)
         alt = dict(alt, coords=coords, metres=alt["metres"] * kept,
                    seconds=None if alt["seconds"] is None else alt["seconds"] * kept)
-        stops = _likely_stops(_intermediate_stops(all_stops, alt["coords"], board, alight, cfg),
+        legs, alt, tips = _reboard(list(result["legs"]), n_transit, alt, cfg, all_stops, routes)
+        frm, to = legs[n_transit]["from"], legs[n_transit]["to"]
+        stops = _likely_stops(_intermediate_stops(all_stops, alt["coords"], frm, to, cfg),
                               cfg, alt["metres"])
         ride = _bus_ride_seconds(cfg, alt["metres"], alt["seconds"], len(stops)) + wait_s
-        leg = dict(result["legs"][n_transit], geometry=alt["coords"], distance_m=alt["metres"],
+        leg = dict(legs[n_transit], geometry=alt["coords"], distance_m=alt["metres"],
                    duration_s=ride, stops_passed=stops, via=alt["via"])
-        legs = list(result["legs"])
+        if frm is not board or to is not alight:
+            leg["label"] = "%s from %s to %s" % (
+                OPERATOR_BUS.get(leg.get("operator"), cfg["label"]),
+                _stop_label(frm, cfg), _stop_label(to, cfg))
         legs[n_transit] = leg
-        total_m = sum(l["distance_m"] for l in legs)
-        total_s = sum(l["duration_s"] for l in legs)
-        summary = dict(result["summary"], distance_m=total_m, duration_s=total_s,
-                       distance_text=format_distance(total_m),
-                       duration_text=format_duration(total_s),
-                       ride_m=alt["metres"], stops_passed=len(stops))
+        summary = _summarise(result, legs)
         options.append(dict(result, legs=legs, summary=summary,
+                            warnings=tips + list(result.get("warnings") or []),
                             option_label=alt["via"] or "Route %d" % (k + 1)))
     options.sort(key=lambda o: o["summary"]["duration_s"])
     best = options[0]
@@ -1258,11 +2053,12 @@ def _bus_options(result, cfg, all_stops, board, alight, wait_s, report):
 
 
 def _plan_mode(origin, destination, mode, report=None, access="walk", alternatives=True,
-               fast_only=False):
+               fast_only=False, operator="any"):
     """A journey by one mode (bus, train or metro). `alternatives`: also look
     for other roads the bus could take. `fast_only`: a bus trip only when the
     street router answers - no slow road-network download (for the short
-    bus rides inside a combined trip)."""
+    bus rides inside a combined trip). `operator`: "ksrtc" or "private"
+    buses only, or "any"."""
     try:
         cfg = mode_config(mode)
         acfg = access_config(access)
@@ -1277,7 +2073,7 @@ def _plan_mode(origin, destination, mode, report=None, access="walk", alternativ
     limit = cfg.get("long_trip_m", cfg["max_trip_m"])
     if direct > limit:
         raise PlanError(
-            "These places are %s apart. Vazhi plans %s trips up to %s. Pick closer "
+            "These places are %s apart. Idavazhi plans %s trips up to %s. Pick closer "
             "places, or another way to travel."
             % (format_distance(direct), cfg["label"].lower(), format_distance(limit)),
             title="Too far for a %s trip" % cfg["label"].lower())
@@ -1297,7 +2093,34 @@ def _plan_mode(origin, destination, mode, report=None, access="walk", alternativ
             report("route", "No timetable train fits this trip, so estimating from the "
                             "railway track instead")
 
-    near_origin, near_dest, all_stops = _find_stops(origin, destination, cfg, acfg, report)
+    near_origin, near_dest, all_stops = _find_stops(origin, destination, cfg, acfg, report,
+                                                    operator)
+    ic = cfg.get("intercity")
+    stands = None
+    if mode == "bus" and not fast_only and ic and direct > ic["from_m"]:
+        stands = _long_bus_stands(origin, destination, direct, all_stops, cfg, operator)
+        if stands:
+            report("stops", "Long-distance buses leave from bus stands: comparing the "
+                            "stands near each end")
+            near_origin, near_dest = stands
+    stands_why = None
+    if mode == "bus" and not fast_only and not stands and operator == "ksrtc":
+        stands = _ksrtc_points(origin, destination, direct, all_stops, cfg)
+        if stands:
+            report("stops", "KSRTC buses run on the main roads: finding KSRTC stops near "
+                            "each end")
+            near_origin, near_dest = stands
+            stands_why = ("KSRTC buses run on the main roads, not the smaller ones, so "
+                          "this trip starts with a local bus to %s.")
+    if (mode == "bus" and not fast_only and not stands and operator == "any"
+            and direct > ANY_LANE_MAX_M):
+        stands = _ksrtc_points(origin, destination, direct, all_stops, cfg, _main_road_stop)
+        if stands:
+            report("stops", "Longer bus routes run on the main roads: finding stops on "
+                            "them near each end")
+            near_origin, near_dest = stands
+            stands_why = ("Buses from stops on the smaller roads run local routes, so this "
+                          "trip starts with a local bus to %s, on the main road.")
 
     # No stop reachable by road from one end: say so, rather than blame the stops.
     # Both ends served by the same stops: a vehicle cannot help here.
@@ -1314,18 +2137,21 @@ def _plan_mode(origin, destination, mode, report=None, access="walk", alternativ
     areas = _network_areas(origin, destination, direct, anchors, cfg, mode)
 
     access_mps = acfg["speed_kmh"] / 3.6
-    fast = (_route_bus_fast(near_origin, near_dest, cfg, report, access_mps)
+    routes = _bus_routes(origin, destination, cfg, wait_s=0) if mode == "bus" else None
+    fast = (_route_bus_fast(near_origin, near_dest, cfg, report, access_mps, routes)
             if mode == "bus" else None)
     road_s = None    # the street router's travel time for the bus's roads
+    on_route = False  # the bus line follows OpenStreetMap's mapped bus routes
     if fast is not None:
-        board, alight, transit_coords, transit_m, skipped, changes, road_s = fast
+        (board, alight, transit_coords, transit_m, skipped, changes, road_s,
+         on_route) = fast
         areas = []   # the street router answered; no road network download
     elif mode == "bus" and fast_only:
         raise PlanError("The route service did not answer.", title="Route service not answering")
     elif mode == "bus" and direct > cfg.get("road_fallback_max_m", float("inf")):
         raise PlanError(
             "The route service did not answer, so a bus trip this long cannot be "
-            "worked out right now. Please try again in a minute. (If you run Vazhi "
+            "worked out right now. Please try again in a minute. (If you run Idavazhi "
             "yourself: open Docker Desktop, where the route service runs.)",
             title="Route service not answering")
 
@@ -1394,7 +2220,9 @@ def _plan_mode(origin, destination, mode, report=None, access="walk", alternativ
               + wait_s * (1 + len(changes))
               + TRANSFER_WALK_S * len(changes))
 
-    label = "%s from %s to %s" % (cfg["label"], _stop_label(board, cfg), _stop_label(alight, cfg))
+    bus_operator = _leg_operator(board, alight, operator, cfg) if mode == "bus" else None
+    label = "%s from %s to %s" % (OPERATOR_BUS.get(bus_operator, cfg["label"]),
+                                  _stop_label(board, cfg), _stop_label(alight, cfg))
     if changes:
         label += ", changing at " + " and ".join(changes)
 
@@ -1411,6 +2239,7 @@ def _plan_mode(origin, destination, mode, report=None, access="walk", alternativ
         "wait_s": wait_s,
         "stops_passed": stops_passed,
         "approximate": False,
+        "operator": bus_operator,
     }
 
     legs = [access_leg, transit_leg, egress_leg]
@@ -1476,7 +2305,6 @@ def _plan_mode(origin, destination, mode, report=None, access="walk", alternativ
                 format_distance(ACCESS_SNAP_RADIUS_M),
             )
         )
-    ic = cfg.get("intercity")
     long_bus = ic is not None and transit_m > ic["from_m"]
     if long_bus:
         notes.append("Shown is the road the bus takes. Bus times under the ride are added "
@@ -1512,11 +2340,27 @@ def _plan_mode(origin, destination, mode, report=None, access="walk", alternativ
         },
     }
     if mode == "bus" and road_s is not None and alternatives:
-        result = _bus_options(result, cfg, all_stops, board, alight, wait_s, report)
+        result = _bus_options(result, cfg, all_stops, board, alight, wait_s, report,
+                              routes, on_route, road_s)
+    if stands:
+        result = _from_stands(result, access, report, stands_why)
+        if operator == "private":
+            for option in [result] + list(result.get("alternatives") or []):
+                option["notes"].insert(1, "Idavazhi does not know the bus routes, so ask at the "
+                                          "stand whether a private bus goes there - most long "
+                                          "routes are KSRTC's.")
+    if mode == "bus" and not fast_only:
+        for option in [result] + list(result.get("alternatives") or []):
+            _split_local_ends(option, all_stops, cfg)
+    if mode == "bus":
+        for option in [result] + list(result.get("alternatives") or []):
+            _tag_operators(option)
+    for option in [result] + list(result.get("alternatives") or []):
+        _operator_notes(option, operator)
     return result
 
 
-# Fastest or Cheapest: Vazhi tries every way it knows - each mode on its own,
+# Fastest or Cheapest: Idavazhi tries every way it knows - each mode on its own,
 # and a train or metro trip with a real bus (not "bus or auto") for a far
 # end - then ranks them by time or by fare.
 PREFERENCES = {"fastest": "Fastest", "cheapest": "Cheapest"}
@@ -1529,17 +2373,25 @@ KOCHI_METRO_AREA = (9.88, 76.20, 10.18, 76.46)
 COMBINE_OPTIONS = 2
 MAX_BEST_OPTIONS = 4
 PER_KIND = 2
+# Fastest / Cheapest: how long the train trips wait for buses to and from
+# their stations before they are offered without them.
+COMBINE_BUDGET_S = 8
 
 
-def plan(origin, destination, mode, report=None, access="walk"):
+def plan(origin, destination, mode, report=None, access="walk", operator="any"):
     """Plan a journey. `origin`/`destination` are (lat, lon); `mode` is a
     vehicle ("bus", "train", "metro") or a preference ("fastest",
     "cheapest") that compares them all; `access` is how the rider reaches
-    and leaves the stops ("walk" or "two_wheeler"). Every leg and option
+    and leaves the stops ("walk" or "two_wheeler"); `operator` the buses
+    the rider wants ("any", "ksrtc", "private"). Every leg and option
     carries a fare estimate (fares.py)."""
+    if operator not in OPERATORS:
+        raise PlanError("Pick KSRTC, private or any bus.")
     if mode in PREFERENCES:
-        return _plan_best(origin, destination, mode, report or (lambda *a: None), access)
-    return fares.price(_plan_mode(origin, destination, mode, report, access))
+        return _plan_best(origin, destination, mode, report or (lambda *a: None), access,
+                          operator)
+    return fares.price(_plan_mode(origin, destination, mode, report, access,
+                                  operator=operator))
 
 
 def _in_area(point, area):
@@ -1595,11 +2447,19 @@ def _with_buses(option, access, report):
     if legs[-1].get("access") == "road":
         last = transit[-1]["to"]
         ends.append((len(legs) - 1, (last["lat"], last["lon"]), destination, "walk", None))
-    swaps = {}
-    for n, a, b, how, station in ends:
+    def bus(end):
+        _n, a, b, how, _station = end
         try:
-            sub = _plan_mode(a, b, "bus", report, how, alternatives=False, fast_only=True)
+            return _plan_mode(a, b, "bus", report, how, alternatives=False, fast_only=True)
         except (PlanError, overpass.OverpassError):
+            return None
+
+    # Both ends at once: each waits on the street router, not on the other.
+    with ThreadPoolExecutor(max_workers=max(1, len(ends))) as pool:
+        subs = list(pool.map(bus, ends))
+    swaps = {}
+    for (n, _a, _b, _how, station), sub in zip(ends, subs):
+        if sub is None:
             continue
         sub_legs = [dict(l) for l in sub["legs"]]
         if station:              # the bus's last stretch ends at the station
@@ -1614,7 +2474,9 @@ def _with_buses(option, access, report):
     return dict(option, legs=new, summary=_summarise(option, new), combined=True,
                 warnings=[w for w in option.get("warnings") or []
                           if not w["title"].startswith(far)],
-                notes=[x for x in option.get("notes") or [] if "straight-line" not in x])
+                # The note about a straight-line stretch stays while one is left.
+                notes=[x for x in option.get("notes") or [] if "straight-line" not in x
+                       or any(l.get("approximate") for l in new)])
 
 
 def _fare_key(option):
@@ -1627,7 +2489,7 @@ def _time_key(option):
     return option["summary"]["duration_s"]
 
 
-def _plan_best(origin, destination, prefer, report, access):
+def _plan_best(origin, destination, prefer, report, access, operator="any"):
     """The fastest or the cheapest way, of every mode and mix that fits."""
     direct = haversine(origin[0], origin[1], destination[0], destination[1])
     if direct < 120:
@@ -1640,20 +2502,25 @@ def _plan_best(origin, destination, prefer, report, access):
             and direct <= MODES["metro"]["max_trip_m"]):
         modes.append("metro")
     lock = threading.Lock()
+    # Set once the answer is on its way: a search still running past its time
+    # limit must not write into the stream after the result.
+    closed = []
 
     def told(mode):
         label = MODES[mode]["label"]
 
         def say(stage, message):
             with lock:
-                report(stage, "%s: %s" % (label, message))
+                if not closed:
+                    report(stage, "%s: %s" % (label, message))
         return say
 
     report("start", "Comparing %s" % " and ".join(MODES[m]["label"].lower() for m in modes))
 
     def attempt(mode):
         try:
-            return _plan_mode(origin, destination, mode, told(mode), access), None
+            return _plan_mode(origin, destination, mode, told(mode), access,
+                              operator=operator), None
         except (PlanError, overpass.OverpassError) as exc:
             return None, exc
         except Exception as exc:  # noqa: BLE001 - one mode failing must not sink the rest
@@ -1681,9 +2548,22 @@ def _plan_best(origin, destination, prefer, report, access):
     if any(o["legs"][0].get("access") == "road" or o["legs"][-1].get("access") == "road"
            for o in combine):
         report("route", "Looking for buses to and from the stations")
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            mixed = [m for m in pool.map(lambda o: _with_buses(o, access, told("bus")), combine)
-                     if m is not None]
+        # An extra, not the answer: the trips already found are not held back
+        # for it. Whatever is ready within COMBINE_BUDGET_S is used; a slower
+        # search finishes on its own and is dropped.
+        pool = ThreadPoolExecutor(max_workers=len(combine))
+        futures = [pool.submit(_with_buses, o, access, told("bus")) for o in combine]
+        done, _late = wait(futures, timeout=COMBINE_BUDGET_S)
+        pool.shutdown(wait=False)
+        mixed = []
+        for f in futures:
+            if f in done and f.exception() is None and f.result() is not None:
+                mixed.append(f.result())
+        if _late:
+            print("  %d bus-to-station search(es) ran past %ds; left out"
+                  % (len(_late), COMBINE_BUDGET_S), flush=True)
+    with lock:
+        closed.append(True)
 
     candidates = []
     for option in singles + mixed:
@@ -1731,7 +2611,7 @@ def _plan_best(origin, destination, prefer, report, access):
         notes.append("Fares are estimates from the fares KSRTC and Kochi Metro publish; "
                      "pay what the conductor or counter asks.")
         if unpriced:
-            notes.append("Train tickets are not priced yet (Vazhi has no official train "
+            notes.append("Train tickets are not priced yet (Idavazhi has no official train "
                          "fare table), so a trip with a train shows only the rest of its "
                          "fare. Buy an unreserved ticket at the station or in the UTS app.")
         option.update(mode=main["mode"], color=MODES[main["mode"]]["color"],

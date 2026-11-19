@@ -1,4 +1,4 @@
-"""Copy Vazhi to your cloud server and set it up (or update it).
+"""Copy Idavazhi to your cloud server and set it up (or update it).
 
     python deploy/push.py <server-ip> --key C:\\path\\to\\ssh-key.key
 

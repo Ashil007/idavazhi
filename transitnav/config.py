@@ -62,6 +62,26 @@ MODES = {
         "road_time_factor": {"town": 1.35, "intercity": 1.2},
         "tile_deg": 0.25,     # stop data is cached in tiles this size
         "router": "bus",      # buses follow the street router's bus routes
+        # Bus stops on the map where no bus runs: never boarded or left at.
+        # Only stops someone who knows the road has checked; riders report
+        # the rest ("No bus runs here", stopnames.py).
+        "skip_stops": {
+            # Side road west of Turavur station (Cherthala): no bus service.
+            "node/11505252377": "Nalukulangara",
+            "node/11505252378": "Nalukulangara (other side)",
+            "way/620304883": "unnamed stop near Turavur station",
+        },
+        # Stops only private buses call at (no KSRTC), as riders who use them
+        # report. A KSRTC trip does not start or end there, and a ride from
+        # one is shown as a private bus.
+        "private_only_stops": {
+            # Unnichira, Thrikkakara: private town buses only.
+            "node/5757830538": "Unnichira",
+            "node/9402200479": "Unnichira (other side)",
+        },
+        # Names of bus stands, where long-distance buses start and stop. OSM
+        # also tags some roadside stops as "stations", so the name decides.
+        "stand_names": r"bus\s*(stand|station|terminal|terminus|depot)|mobility hub|\bksrtc\b|\bdepot\b",
         "stop_filters": [
             '["highway"="bus_stop"]',
             '["public_transport"="platform"]["bus"="yes"]',

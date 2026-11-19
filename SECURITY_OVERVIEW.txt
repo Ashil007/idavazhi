@@ -1,16 +1,16 @@
 ================================================================================
-VAZHI (TRANSITNAV) - SECURITY & PRIVACY ARCHITECTURE
+IDAVAZHI (TRANSITNAV) - SECURITY & PRIVACY ARCHITECTURE
 ================================================================================
 Document: Security, Anti-Extraction & Privacy Overview
 Date: November 2026
-Application: Vazhi Transit Navigator (Web & PWA/APK)
+Application: Idavazhi Transit Navigator (Web & PWA/APK)
 
 --------------------------------------------------------------------------------
 EXECUTIVE SUMMARY
 --------------------------------------------------------------------------------
-Vazhi is built from the ground up on a "Privacy-First / Zero-Knowledge" 
+Idavazhi is built from the ground up on a "Privacy-First / Zero-Knowledge" 
 architecture. Unlike mainstream transit apps and ride-hailing services that 
-monetize rider location histories, telemetry, and personal identifiers, Vazhi 
+monetize rider location histories, telemetry, and personal identifiers, Idavazhi 
 is mathematically and architecturally designed to make user data extraction 
 impossible.
 
@@ -32,7 +32,7 @@ trackers, and confines all trip tracking to the rider's local device hardware.
 * No Personal Identifiable Information (PII):
   The database contains zero personal records. Even payment checkout flows 
   (Razorpay/UPI) are handled via compliant isolated redirects with no financial 
-  data stored on Vazhi servers.
+  data stored on Idavazhi servers.
 
 --------------------------------------------------------------------------------
 2. LOCATION PRIVACY & ON-DEVICE PROXIMITY PROCESSING
@@ -57,7 +57,7 @@ trackers, and confines all trip tracking to the rider's local device hardware.
 3. ZERO THIRD-PARTY TRACKERS & EXTERNAL SURVEILLANCE
 --------------------------------------------------------------------------------
 * No Ad SDKs or Telemetry:
-  Vazhi contains ZERO instances of Google Analytics, Facebook Pixel, Firebase 
+  Idavazhi contains ZERO instances of Google Analytics, Facebook Pixel, Firebase 
   Telemetry, Mixpanel, Crashlytics, or commercial advertising SDKs.
 
 * Self-Hosted, Pinned Dependencies:
@@ -70,11 +70,11 @@ trackers, and confines all trip tracking to the rider's local device hardware.
 4. OPERATING SYSTEM & MOBILE SANDBOXING (PWA / APK)
 --------------------------------------------------------------------------------
 * Isolated Execution Environment:
-  When installed as an app (PWA / WebAPK), Vazhi executes strictly inside the 
+  When installed as an app (PWA / WebAPK), Idavazhi executes strictly inside the 
   hardened browser engine sandbox.
 
 * Strictly Restricted Permissions:
-  Vazhi requests only two explicit runtime permissions:
+  Idavazhi requests only two explicit runtime permissions:
   1. Location (Foreground): Used strictly to find nearest stations and track the 
      vehicle during an active trip.
   2. Notifications: Used strictly to sound the wake-up alarm before the destination 

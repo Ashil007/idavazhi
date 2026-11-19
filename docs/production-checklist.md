@@ -1,10 +1,10 @@
 # Production checklist
 
 Every item from the "who's gonna tell vibe coders about…" list, checked
-against Vazhi as of November 2026.
+against Idavazhi as of November 2026.
 
 - **Done:** in place and tested.
-- **Not needed:** Vazhi doesn't have the feature the item protects (for
+- **Not needed:** Idavazhi doesn't have the feature the item protects (for
   example, there are no accounts, so no passwords to protect).
 - **Later:** worth doing before a wide launch, but not needed for testing
   with friends.
@@ -18,21 +18,21 @@ with `python tools/load_test.py`.
 |---|---|---|
 | HTTPS / TLS | Done | Caddy gets a free certificate and redirects plain `http://` to `https://` (deploy/setup.sh) |
 | Security headers | Done | CSP, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and COOP on every response (transitnav/server.py); HSTS from Caddy |
-| Content Security Policy | Done | Only Vazhi's own scripts; no inline scripts. Tested: the map, plans and the offline cache all work under it |
+| Content Security Policy | Done | Only Idavazhi's own scripts; no inline scripts. Tested: the map, plans and the offline cache all work under it |
 | Clickjacking | Done | `frame-ancestors 'none'` plus `X-Frame-Options: DENY` |
 | XSS | Done | Every name from riders, OpenStreetMap or the timetable goes through `escapeHtml` before it reaches the page; CSP blocks injected scripts as a second line of defence |
-| CSRF | Done | Posts must be JSON, and when the browser names the page it came from, it must be Vazhi's own site (`_same_site`) |
+| CSRF | Done | Posts must be JSON, and when the browser names the page it came from, it must be Idavazhi's own site (`_same_site`) |
 | SQL injection | Done | Every query uses `?` parameters (timings.py, stopnames.py, places.py) |
 | Path traversal | Done | Files are served only from `web/`; checked with `commonpath`. Tested with `../`, `%2e%2e` and `data/` |
 | Command injection | Not needed | Nothing a visitor sends reaches a shell |
 | SSRF | Not needed | The server only contacts fixed addresses (Overpass, the route servers, Nominatim), never one a visitor gives |
-| Open redirects | Done | The only redirects go to Vazhi's own `/app` |
+| Open redirects | Done | The only redirects go to Idavazhi's own `/app` |
 | Input validation (on the server) | Done | Coordinates must be finite numbers on the globe; travel modes must be on a list; search text is capped at 120 characters, ids at 64, bodies at 4 KB (and 64 KB at Caddy) |
 | File upload security | Not needed | There are no uploads |
 | Mass assignment | Not needed | Only named fields are read from each post |
 | IDOR | Not needed | There are no private records; bus times and stop names are public, and votes are tied to a hashed device id |
 | Rate limiting | Done | Per visitor: plans, searches, prefetches, bus times and stop edits (transitnav/limits.py). Over the limit gets a polite message |
-| Brute force, account lockout, passwords, password resets, magic links, passkeys, 2FA, SSO, sessions, cookie flags, tokens | Not needed | Vazhi has no accounts, logins or cookies |
+| Brute force, account lockout, passwords, password resets, magic links, passkeys, 2FA, SSO, sessions, cookie flags, tokens | Not needed | Idavazhi has no accounts, logins or cookies |
 | Authentication / authorization / roles / row-level security | Not needed | Same reason. Becomes "Later" if riders ever sign in |
 | API keys, secrets management, secret rotation, environment variables | Done | The app holds no secrets. The only key is your SSH key, which stays on your PC (`~/.ssh/vazhi-cloud.key`, locked to your user). Settings go through environment variables (`VAZHI_MAX_PLANS`, `TRANSITNAV_VALHALLA`) |
 | Encryption in transit | Done | HTTPS between phones and the server; everything else is inside one machine |

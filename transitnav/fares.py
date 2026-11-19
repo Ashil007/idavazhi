@@ -15,7 +15,7 @@
     Conductors charge by fare stage; on ordinary buses a stage is 2.5 km, so
     ordinary fares go 10, 13, 15, 18, 20, 23 ... and a ride is priced as a
     range from the stage just below the distance to the stage just above.
-    Not added, because Vazhi cannot know them: +25% on ghat roads, festival
+    Not added, because Idavazhi cannot know them: +25% on ghat roads, festival
     and special services, KSRTC's flexi fares, season and student tickets.
   * Kochi Metro - KMRL's distance-based fare chart
     (corporate.kochimetro.org/fare-chart), single-journey fares.
@@ -25,8 +25,11 @@ trains (Indian Railways publishes only the changes to its fare table),
 auto-rickshaws and cabs. Those legs carry `fare: None`, and a trip with one
 says its fare is not complete rather than guess.
 
-Vazhi does not know which bus type comes, so a bus leg lists the fare for
+Idavazhi does not know which bus type comes, so a bus leg lists the fare for
 every type, and the summary shows the ordinary-to-fast-passenger range.
+Private buses charge by the same order; they run the ordinary and fast
+classes, so a ride by private bus lists only those. The higher classes
+(Super Fast and up, AC, Volvo, sleeper) are KSRTC's.
 """
 
 from __future__ import annotations
@@ -62,6 +65,9 @@ STAGE_M = {"City / Ordinary": 2500, "Low Floor non-AC": 2500}
 # The summary shows the common ordinary and fast ones; the rider sees every
 # type in the leg's details.
 SUMMARY_TYPES = ("City / Ordinary", "Fast Passenger")
+# The classes a private bus runs as (see the top of this file).
+PRIVATE_TYPES = ("City / Ordinary", "Fast Passenger")
+PRIVATE_NOTE = "Private buses charge the same government fares as KSRTC."
 
 # Kochi Metro single-journey fares: (up to this many metres, rupees).
 METRO_SLABS = [(2000, 10), (5000, 20), (10000, 30), (15000, 40), (20000, 50)]
@@ -78,14 +84,17 @@ def ksrtc_fare(paise_per_km, minimum, minimum_km, rounding, metres):
     return -(-paise // step) * rounding
 
 
-def bus_fare(metres):
+def bus_fare(metres, operator=None):
     """What a bus ride of `metres` costs on each class of KSRTC bus:
     {"min", "max", "source", "types": [{"name", "rupees", "low", "high"}],
     "notes": [...]}. "rupees" is the fare for the exact distance; low/high
     are the fares at the fare stages either side of it. min/max are the
-    summary's range (ordinary at the stage below to fast passenger)."""
+    summary's range (ordinary at the stage below to fast passenger).
+    `operator` "private": only the classes private buses run."""
     types = []
     for name, rate, minimum, minimum_km, rounding in KSRTC_TYPES:
+        if operator == "private" and name not in PRIVATE_TYPES:
+            continue
         exact = ksrtc_fare(rate, minimum, minimum_km, rounding, metres)
         low = high = exact
         stage = STAGE_M.get(name)
@@ -99,7 +108,7 @@ def bus_fare(metres):
     low = by[SUMMARY_TYPES[0]]["low"]
     high = max(by[SUMMARY_TYPES[1]]["high"], by[SUMMARY_TYPES[0]]["high"])
     return {"min": low, "max": high, "source": KSRTC_SOURCE, "types": types,
-            "notes": list(NOTES)}
+            "notes": [PRIVATE_NOTE] if operator == "private" else list(NOTES)}
 
 
 def metro_fare(metres):
@@ -111,14 +120,14 @@ def metro_fare(metres):
 
 def leg_fare(leg):
     """What one leg costs: a dict, 0 for the rider's own walk or ride, or None
-    when Vazhi has no official fare for it."""
+    when Idavazhi has no official fare for it."""
     kind = leg.get("type")
     if kind == "wait":
         return 0
     if kind == "transit":
         mode = leg.get("mode")
         if mode == "bus":
-            return bus_fare(leg["distance_m"])
+            return bus_fare(leg["distance_m"], leg.get("operator"))
         if mode == "metro":
             # A metro ride with a change is still one ticket.
             return metro_fare(leg["distance_m"])

@@ -14,6 +14,22 @@ has no stop at all where buses really stop. Riders fix that here:
   once at least CONFIRM riders say yes and more say yes than no; its name is
   the one most riders back.
 
+* No bus: the map has a bus stop where no bus runs (a stop drawn on a side
+  road, a stop whose service ended). A rider whose trip uses it says so; once
+  at least NO_BUS_CONFIRM riders say so, and more than say buses do stop
+  there, the planner stops boarding or leaving buses there.
+
+* Which buses: a rider says whose buses stop there - private, KSRTC or both
+  - and up to where each kind goes ("private up to Kaloor, KSRTC up to
+  Alappuzha"). Once BUSES_CONFIRM riders agree on the kind (and more than on
+  any other), the planner uses it: a KSRTC trip does not start at a stop
+  only private buses use, and the ride says whose bus it is. A place shows
+  under a ride once PLACE_CONFIRM riders name it, so one rider's typing is
+  never shown to everyone. The rider can also say whether fast buses (Fast
+  Passenger, Super Fast, Limited Stop) stop there: once FAST_CONFIRM riders
+  agree (and more than say the other), a long bus ride starts and ends at
+  the stop if they do, and not if they don't.
+
 Stored in data/stops.db - riders' data, never in .cache/ or git. Like bus
 times (timings.py), a rider is known only by a hash of a random browser id.
 """
@@ -32,6 +48,12 @@ from .timings import ROOT, TimingError, _device, _metres, _rate
 DB_PATH = os.path.join(ROOT, "data", "stops.db")
 
 CONFIRM = 30              # riders who must agree before a name or stop is used
+NO_BUS_CONFIRM = 10       # riders who must say no bus runs at a stop
+BUSES_CONFIRM = 5         # riders who must agree whose buses stop somewhere
+PLACE_CONFIRM = 2         # riders who must name a place a stop's buses go to
+FAST_CONFIRM = 3          # riders who must agree whether fast buses stop there
+FAST_ANSWERS = ("yes", "no")
+BUS_KINDS = ("private", "ksrtc", "both")
 SAME_STOP_M = 40          # a new stop this close to another is the same stop
 ASK_NEAR_M = 600          # riders planning this close to a new stop are asked
 OVERRIDES_TTL_S = 60      # how often the planner re-reads the winning names
@@ -40,7 +62,7 @@ OSM_KEY = re.compile(r"(node|way|relation)/\d{1,15}")
 NEW_KEY = re.compile(r"new/(\d{1,12})")
 
 _lock = threading.Lock()
-_cache = {"at": 0.0, "names": {}, "stops": []}
+_cache = {"at": 0.0, "names": {}, "stops": [], "nobus": frozenset(), "buses": {}}
 
 
 class StopError(TimingError):
@@ -74,7 +96,23 @@ def _connect():
         CREATE TABLE IF NOT EXISTS exist_votes (
             stop_id INTEGER NOT NULL, device TEXT NOT NULL, vote INTEGER NOT NULL,
             PRIMARY KEY (stop_id, device));
+        -- Does a bus really stop here? (map or riders' stops; 1 = no bus runs
+        -- here, -1 = buses do stop here)
+        CREATE TABLE IF NOT EXISTS nobus_votes (
+            key TEXT NOT NULL, device TEXT NOT NULL, vote INTEGER NOT NULL, at REAL NOT NULL,
+            PRIMARY KEY (key, device));
+        -- Whose buses stop here ('private', 'ksrtc' or 'both'), and the places
+        -- each kind goes up to, as the rider typed them (comma-separated).
+        CREATE TABLE IF NOT EXISTS bus_votes (
+            key TEXT NOT NULL, device TEXT NOT NULL, kind TEXT NOT NULL,
+            private_to TEXT NOT NULL, ksrtc_to TEXT NOT NULL, at REAL NOT NULL,
+            PRIMARY KEY (key, device));
     """)
+    # Do fast buses stop here: 'yes', 'no' or '' (not sure). Added later, so
+    # an older database gets the column.
+    if "fast" not in [r[1] for r in db.execute("PRAGMA table_info(bus_votes)")]:
+        db.execute("ALTER TABLE bus_votes ADD COLUMN fast TEXT NOT NULL DEFAULT ''")
+        db.commit()
     return db
 
 
@@ -244,6 +282,134 @@ def answer(body, client="?"):
     _invalidate()
 
 
+def no_bus(body, client="?"):
+    """A rider says no bus runs at stop `key` (`no_bus` true), that buses do
+    stop there (false), or takes their word back (null). Returns the count."""
+    key = str(body.get("key") or "")
+    if not (OSM_KEY.fullmatch(key) or NEW_KEY.fullmatch(key)):
+        raise StopError("Which stop is this about?")
+    said = body.get("no_bus")
+    if said not in (True, False, None):
+        raise StopError("Say whether a bus runs here.")
+    device = _device(body.get("device"))
+    _rate("stopvote", client)
+    with _lock:
+        db = _connect()
+        try:
+            if said is None:
+                db.execute("DELETE FROM nobus_votes WHERE key=? AND device=?", (key, device))
+            else:
+                db.execute("INSERT OR REPLACE INTO nobus_votes VALUES (?,?,?,?)",
+                           (key, device, 1 if said else -1, time.time()))
+            db.commit()
+            out = _no_bus_count(db, key)
+        finally:
+            db.close()
+    _invalidate()
+    return out
+
+
+def _places(text):
+    """"Kaloor, Kakkanad and Aluva" -> ["Kaloor", "Kakkanad", "Aluva"]."""
+    text = str(text or "")
+    if re.search(r"https?:|www\.|<|>", text, re.I):
+        raise StopError("Give place names only, like: Kaloor, Kakkanad.")
+    out = []
+    for part in re.split(r"[,;/\n]|\band\b|&", text, flags=re.I):
+        part = re.sub(r"\s+", " ", part).strip(" .-")
+        if not part:
+            continue
+        if not 2 <= len(part) <= 40 or not norm(part):
+            raise StopError("Give place names only, like: Kaloor, Kakkanad.")
+        if norm(part) not in [norm(p) for p in out]:
+            out.append(part)
+    if len(out) > 6:
+        raise StopError("Give at most 6 places.")
+    return out
+
+
+def buses(body, client="?"):
+    """A rider says whose buses stop at `key` - `kind` "private", "ksrtc" or
+    "both" (null takes their word back) - up to where each kind goes
+    (`private_to`, `ksrtc_to`: place names), and whether fast buses stop
+    there (`fast`: "yes", "no", or empty for not sure). Returns the count."""
+    key = str(body.get("key") or "")
+    if not (OSM_KEY.fullmatch(key) or NEW_KEY.fullmatch(key)):
+        raise StopError("Which stop is this about?")
+    kind = body.get("kind")
+    if kind is not None and kind not in BUS_KINDS:
+        raise StopError("Say whether private buses, KSRTC buses or both stop here.")
+    private_to = _places(body.get("private_to")) if kind in ("private", "both") else []
+    ksrtc_to = _places(body.get("ksrtc_to")) if kind in ("ksrtc", "both") else []
+    fast = body.get("fast") or ""
+    if fast not in FAST_ANSWERS + ("",):
+        raise StopError("Say whether fast buses stop here: yes, no or not sure.")
+    device = _device(body.get("device"))
+    _rate("stopvote", client)
+    with _lock:
+        db = _connect()
+        try:
+            if kind is None:
+                db.execute("DELETE FROM bus_votes WHERE key=? AND device=?", (key, device))
+            else:
+                db.execute("INSERT OR REPLACE INTO bus_votes (key, device, kind, private_to,"
+                           " ksrtc_to, at, fast) VALUES (?,?,?,?,?,?,?)",
+                           (key, device, kind, ", ".join(private_to), ", ".join(ksrtc_to),
+                            time.time(), fast))
+            db.commit()
+            out = _bus_count(db, key)
+        finally:
+            db.close()
+    _invalidate()
+    return out
+
+
+def _bus_tally(rows):
+    """What riders' reports for one stop add up to: {"kind"} once enough
+    agree, {"private_to", "ksrtc_to"}: places enough riders name, and
+    {"fast"}: "yes" or "no" once enough agree."""
+    counts = {}
+    for r in rows:
+        counts[r["kind"]] = counts.get(r["kind"], 0) + 1
+    out = {}
+    if counts:
+        top = max(counts, key=counts.get)
+        if counts[top] >= BUSES_CONFIRM and all(n < counts[top] for k, n in counts.items()
+                                                if k != top):
+            out["kind"] = top
+    for col in ("private_to", "ksrtc_to"):
+        seen, first = {}, {}
+        for r in rows:
+            for p in (x.strip() for x in r[col].split(",")):
+                if p:
+                    seen[norm(p)] = seen.get(norm(p), 0) + 1
+                    first.setdefault(norm(p), p)
+        named = sorted((n for n in seen if seen[n] >= PLACE_CONFIRM), key=lambda n: -seen[n])
+        if named and out.get("kind", "both") in (col[:-3], "both"):
+            out[col] = [first[n] for n in named[:5]]
+    said = {a: sum(1 for r in rows if r["fast"] == a) for a in FAST_ANSWERS}
+    for a, other in (("yes", "no"), ("no", "yes")):
+        if said[a] >= FAST_CONFIRM and said[a] > said[other]:
+            out["fast"] = a
+    return out
+
+
+def _bus_count(db, key):
+    rows = db.execute("SELECT kind, private_to, ksrtc_to, fast FROM bus_votes WHERE key=?",
+                      (key,)).fetchall()
+    votes = {k: sum(1 for r in rows if r["kind"] == k) for k in BUS_KINDS}
+    fast_votes = {a: sum(1 for r in rows if r["fast"] == a) for a in FAST_ANSWERS}
+    return dict(votes=votes, needed=BUSES_CONFIRM, fast_votes=fast_votes,
+                fast_needed=FAST_CONFIRM, **_bus_tally(rows))
+
+
+def _no_bus_count(db, key):
+    r = db.execute("SELECT COALESCE(SUM(vote = 1), 0) AS no, COALESCE(SUM(vote = -1), 0) AS yes"
+                   " FROM nobus_votes WHERE key=?", (key,)).fetchone()
+    return {"no_bus": r["no"], "bus": r["yes"], "needed": NO_BUS_CONFIRM,
+            "used": r["no"] >= NO_BUS_CONFIRM and r["no"] > r["yes"]}
+
+
 # ------------------------------------------------------------------- reads
 
 def _public(tally):
@@ -270,7 +436,20 @@ def _load():
                     stops.append({"id": "new/%d" % r["id"], "lat": r["lat"], "lon": r["lon"],
                                   "name": tally[0]["name"], "kind": "stop", "by_riders": True,
                                   "operator": None, "network": None, "ref": None})
-        return names, stops
+        nobus = frozenset(
+            r["key"] for r in db.execute(
+                "SELECT key, SUM(vote = 1) AS no, SUM(vote = -1) AS yes FROM nobus_votes"
+                " GROUP BY key")
+            if r["no"] >= NO_BUS_CONFIRM and r["no"] > r["yes"])
+        by_key = {}
+        for r in db.execute("SELECT key, kind, private_to, ksrtc_to, fast FROM bus_votes"):
+            by_key.setdefault(r["key"], []).append(r)
+        buses = {}
+        for key, rows in by_key.items():
+            tally = _bus_tally(rows)
+            if tally:
+                buses[key] = tally
+        return names, stops, nobus, buses
     finally:
         db.close()
 
@@ -279,11 +458,18 @@ def _current():
     now = time.monotonic()
     if now - _cache["at"] > OVERRIDES_TTL_S:
         try:
-            _cache["names"], _cache["stops"] = _load()
+            (_cache["names"], _cache["stops"], _cache["nobus"],
+             _cache["buses"]) = _load()
         except sqlite3.Error:
             pass                       # keep the last good answer
         _cache["at"] = now
     return _cache["names"], _cache["stops"]
+
+
+def no_bus_keys():
+    """Stops riders have confirmed no bus runs at."""
+    _current()
+    return _cache["nobus"]
 
 
 def apply(stops, bbox=None):
@@ -291,6 +477,7 @@ def apply(stops, bbox=None):
     `bbox` (south, west, north, east). Returns a new list; the map's name
     stays available as `map_name`."""
     names, extra = _current()
+    buses_at = _cache["buses"]
     out = []
     for s in stops:
         if s.get("id") in names:
@@ -301,6 +488,14 @@ def apply(stops, bbox=None):
         ids = {s.get("id") for s in out}
         out += [dict(x) for x in extra
                 if s_ <= x["lat"] <= n and w <= x["lon"] <= e and x["id"] not in ids]
+    # Whose buses stop there, and where they go, as riders agree:
+    # "buses" ("private", "ksrtc", "both"), "private_to", "ksrtc_to", and
+    # "fast" ("yes" / "no": do fast buses stop there).
+    for i, s in enumerate(out):
+        said = buses_at.get(s.get("id"))
+        if said:
+            out[i] = dict(s, buses=said.get("kind"), private_to=said.get("private_to"),
+                          ksrtc_to=said.get("ksrtc_to"), fast=said.get("fast"))
     return out
 
 

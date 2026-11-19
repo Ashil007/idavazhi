@@ -1,19 +1,19 @@
-"""Vazhi Messages: read what riders send you, on this computer.
+"""Idavazhi Messages: read what riders send you, on this computer.
 
-    pythonw tools/inbox.py          (or the "Vazhi Messages" shortcut on your desktop)
+    pythonw tools/inbox.py          (or the "Idavazhi Messages" shortcut on your desktop)
     python tools/inbox.py --shortcut   puts that shortcut on your desktop
 
-Shows the messages from "Tell me what you think" (About Vazhi) and the
+Shows the messages from "Tell me what you think" (About Idavazhi) and the
 contact page, the stars riders give a trip and the bus tickets they buy you
 (Razorpay), newest first. Ones you haven't seen yet are in bold. It checks
 for new ones every 15 seconds (30 when it asks a server).
 
 Where it reads them from:
 
-  * Vazhi runs on this computer: straight from data/feedback.db.
-  * Vazhi runs on a server (the cloud): from that server, with a password.
+  * Idavazhi runs on this computer: straight from data/feedback.db.
+  * Idavazhi runs on a server (the cloud): from that server, with a password.
 
-        python tools/inbox.py --setup https://your-vazhi-address
+        python tools/inbox.py --setup https://your-idavazhi-address
             makes the password (VAZHI_INBOX_TOKEN) and saves it and the
             address (VAZHI_INBOX_URL) in data/vazhi.env here. Copy the
             VAZHI_INBOX_TOKEN line into the server's data/vazhi.env too.
@@ -58,7 +58,7 @@ class InboxError(Exception):
 
 
 def server():
-    """The Vazhi server to ask, or "" to read data/feedback.db here."""
+    """The Idavazhi server to ask, or "" to read data/feedback.db here."""
     return settings.get("VAZHI_INBOX_URL").rstrip("/")
 
 
@@ -85,7 +85,7 @@ def load_remote(url):
     if not token:
         raise InboxError("No password yet: run  python tools/inbox.py --setup " + url)
     req = urllib.request.Request(url + "/api/inbox", headers={
-        "Authorization": "Bearer " + token, "User-Agent": "VazhiMessages/1"})
+        "Authorization": "Bearer " + token, "User-Agent": "IdavazhiMessages/1"})
     try:
         with urllib.request.urlopen(req, timeout=12) as r:
             return rows_of(json.loads(r.read().decode("utf-8")))
@@ -136,7 +136,7 @@ class Inbox:
         self.seen = read_seen()
         self.first_seen = self.seen
         self.loading, self.result, self.error, self.last = False, None, None, []
-        root.title("Vazhi Messages")
+        root.title("Idavazhi Messages")
         root.geometry("980x640")
         root.minsize(720, 460)
         root.configure(bg=BG)
@@ -268,7 +268,7 @@ class Inbox:
         self.summary.configure(text=text)
         self.status.configure(text=self.error or "Reading from " + where,
                               fg=AMBER if self.error else FAINT)
-        self.root.title("Vazhi Messages" + (" (%d new)" % new if new else ""))
+        self.root.title("Idavazhi Messages" + (" (%d new)" % new if new else ""))
         if keep and keep[0] in self.rows and self.tree.exists(keep[0]):
             self.tree.selection_set(keep[0])
         elif not rows:
@@ -313,17 +313,17 @@ class Inbox:
 
 
 def make_shortcut():
-    """'Vazhi Messages' on the Windows desktop, opening this window."""
+    """'Idavazhi Messages' on the Windows desktop, opening this window."""
     pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     if not os.path.isfile(pythonw):
         pythonw = sys.executable
     icon = os.path.join(ROOT, "tools", "inbox.ico")
     ps = (
         "$d=[Environment]::GetFolderPath('Desktop');"
-        "$s=(New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Vazhi Messages.lnk'));"
+        "$s=(New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Idavazhi Messages.lnk'));"
         "$s.TargetPath='%s';$s.Arguments='\"%s\"';$s.WorkingDirectory='%s';"
-        "$s.Description='Messages and trip ratings from Vazhi riders';"
-        "%s$s.Save();Write-Output (Join-Path $d 'Vazhi Messages.lnk')"
+        "$s.Description='Messages and trip ratings from Idavazhi riders';"
+        "%s$s.Save();Write-Output (Join-Path $d 'Idavazhi Messages.lnk')"
         % (pythonw, os.path.abspath(__file__), ROOT,
            ("$s.IconLocation='%s';" % icon) if os.path.isfile(icon) else ""))
     out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
@@ -347,14 +347,14 @@ def setup(url):
         print("Keeping the inbox password already in data/vazhi.env (VAZHI_INBOX_TOKEN).")
     if url:
         settings.put("VAZHI_INBOX_URL", url)
-        print("Vazhi Messages will now read from %s." % url)
+        print("Idavazhi Messages will now read from %s." % url)
         print("On that server, put the same VAZHI_INBOX_TOKEN line in its data/vazhi.env and restart it.")
     return 0
 
 
 def go_local():
     settings.put("VAZHI_INBOX_URL", "")
-    print("Vazhi Messages will read data/feedback.db on this computer again.")
+    print("Idavazhi Messages will read data/feedback.db on this computer again.")
     return 0
 
 

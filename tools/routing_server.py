@@ -11,8 +11,13 @@ tools/build_map.py or this script downloads it).
 
 The container restarts with Docker, so after the first build it is simply
 there whenever Docker Desktop is running.
+
+`start` also lets the app send its own "hierarchy limits" (so bus routes
+keep to the main roads, transitnav/router.py BUS_LANE_REACH_M): it turns
+that on in the server's valhalla.json and restarts the server if needed.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -43,6 +48,36 @@ def ensure_pbf():
     os.replace(PBF + ".part", PBF)
 
 
+def allow_hierarchy_limits():
+    """Let requests set Valhalla's hierarchy limits (off by default). True if
+    valhalla.json was changed, so the server must restart to use it."""
+    path = os.path.join(DATA, "valhalla.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            conf = json.load(f)
+    except (OSError, ValueError):
+        return False            # not written yet: the first build makes it
+    limits = conf.setdefault("service_limits", {}).setdefault("hierarchy_limits", {})
+    if limits.get("allow_modification") is True:
+        return False
+    limits["allow_modification"] = True
+    with open(path + ".part", "w", encoding="utf-8") as f:
+        json.dump(conf, f, indent=2)
+    os.replace(path + ".part", path)
+    print("Allowed hierarchy limits in %s (bus routes keep to the main roads)." % path)
+    return True
+
+
+def wait_ready():
+    for _ in range(180):
+        if status(quiet=True):
+            print("Routing server ready: http://127.0.0.1:%d" % PORT)
+            return True
+        time.sleep(10)
+    print("Still not answering; see: docker logs %s" % NAME)
+    return False
+
+
 def start():
     ensure_pbf()
     os.makedirs(DATA, exist_ok=True)
@@ -53,6 +88,8 @@ def start():
                      capture=True).stdout.strip()
     if running:
         print("Container exists (%s); starting it." % running)
+        if allow_hierarchy_limits() and running.startswith("Up"):
+            docker("restart", NAME)
         docker("start", NAME)
     else:
         docker("run", "-d", "--name", NAME, "--restart", "unless-stopped",
@@ -64,13 +101,14 @@ def start():
                IMAGE)
     print("Valhalla is building or loading its tiles. Waiting for it to answer on "
           "port %d (the first build takes 10-20 minutes)..." % PORT, flush=True)
-    for _ in range(180):
-        if status(quiet=True):
-            print("Routing server ready: http://127.0.0.1:%d" % PORT)
-            return 0
-        time.sleep(10)
-    print("Still not answering; see: docker logs %s" % NAME)
-    return 1
+    if not wait_ready():
+        return 1
+    # The first build writes valhalla.json; the setting needs a restart.
+    if allow_hierarchy_limits():
+        docker("restart", NAME)
+        if not wait_ready():
+            return 1
+    return 0
 
 
 def status(quiet=False):

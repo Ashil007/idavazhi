@@ -30,7 +30,7 @@ DB_PATH = os.path.join(ROOT, "data", "places.db")
 KINDS = {"shop": "Shop", "office": "Office", "food": "Restaurant", "health": "Hospital or clinic",
          "school": "School or college", "worship": "Place of worship", "home": "House", "other": "Place"}
 SAME_M = 80               # the same name this close is the same place
-# Vazhi covers Kerala; a little margin for the border towns.
+# Idavazhi covers Kerala; a little margin for the border towns.
 BOUNDS = (8.0, 13.0, 74.7, 77.6)    # south, north, west, east
 
 _lock = threading.Lock()
@@ -68,7 +68,7 @@ def _where(body):
         raise PlaceError("Tap where the place is on the map.") from None
     s, n, w, e = BOUNDS
     if not (s <= lat <= n and w <= lon <= e):
-        raise PlaceError("Vazhi covers Kerala - that spot is outside it.")
+        raise PlaceError("Idavazhi covers Kerala - that spot is outside it.")
     return lat, lon
 
 

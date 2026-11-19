@@ -1,4 +1,4 @@
-/* Vazhi website: "/" plus the policy and contact pages.
+/* Idavazhi website: "/" plus the policy and contact pages.
  *
  * Design system
  * - Colour comes from the logo, used at full strength: amber for the opening
@@ -246,6 +246,13 @@ b, strong { font-weight: 600; }
 .logo { display: inline-flex; align-items: center; gap: 10px; margin-right: auto; text-decoration: none; color: var(--ink); }
 .logo img { border-radius: 10px; }
 .logo .ml { font-size: 24px; line-height: 1; }
+/* Narrow phones: a smaller logo, so ഇടവഴി, the theme switch, "Open app"
+   and the menu fit in one row. */
+@media (max-width: 400px) {
+  .logo { gap: 8px; }
+  .logo img { width: 32px; height: 32px; }
+  .logo .ml { font-size: 21px; }
+}
 .nav__links { display: none; gap: 2px; margin-right: 12px; }
 .nav__links a { padding: 8px 14px; border-radius: 999px; color: var(--ink); font-size: 15px; font-weight: 500; text-decoration: none; }
 .nav__links a:hover { background: var(--hover); }

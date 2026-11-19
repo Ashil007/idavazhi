@@ -41,7 +41,7 @@ Settings (data/vazhi.env, never in git):
     VAZHI_SARVAM_PACE        speed, 0.5 to 2.0 (default 0.95: a touch slower,
                              for a rider who has just woken up)
     VAZHI_ELEVENLABS_KEY     the API key (elevenlabs.io: Profile -> API Keys)
-    VAZHI_ELEVENLABS_VOICE   the voice id (default: the voice chosen for Vazhi)
+    VAZHI_ELEVENLABS_VOICE   the voice id (default: the voice chosen for Idavazhi)
     VAZHI_ELEVENLABS_MODEL   default eleven_v3, which speaks Malayalam
     VAZHI_VOICE_DAILY_CHARS  the most characters of new stop names sent to
                              the voice service in a day (default 300). The fixed

@@ -1,6 +1,6 @@
-# Vazhi (വഴി)
+# Idavazhi (ഇടവഴി)
 
-*Vazhi* is Malayalam for "the way". Public-transport journey planning for
+*Idavazhi* (ഇടവഴി) is Malayalam for the narrow lane between houses - the shortcut everyone takes to reach the main road quicker. Public-transport journey planning for
 Kerala on OpenStreetMap data. Pick two points on the map,
 choose **bus**, **train** or **metro**, choose whether you get to and from the
 stops on foot or by **two-wheeler**, and the app works out:
@@ -30,7 +30,7 @@ Then open <http://127.0.0.1:8000>. Useful flags: `--port 8001`, `--host 0.0.0.0`
 
 ### The website and the app
 
-- `/` is the **Vazhi website**: what Vazhi is for, its features, screenshots,
+- `/` is the **Idavazhi website**: what Idavazhi is for, its features, screenshots,
   how it works, questions and answers, and two ways in: **Download the app**
   and **Use the web version**. The page is `web/home.html` (with `home.css`
   and `home.js`); the screenshots in `web/site/` are of the real app.
@@ -39,7 +39,7 @@ Then open <http://127.0.0.1:8000>. Useful flags: `--port 8001`, `--host 0.0.0.0`
 - Shared trips use `/app?from=...`. Older links (`/?from=...`) are sent on to
   `/app`.
 
-**Download the app** installs Vazhi from the website, with no app store. On
+**Download the app** installs Idavazhi from the website, with no app store. On
 Android, and in Chrome or Edge on a computer, it opens the browser's own Install
 prompt. On an iPhone, or where the browser has no prompt, it shows the steps
 instead (Share > Add to Home Screen, or the browser menu).
@@ -93,7 +93,7 @@ and follow the bus, notifications so the alarm wakes you with the screen off.
 A phone asks only once, so after **Block** the screen explains how to allow
 them in settings and checks again when you come back. It also explains the
 cases where they can't be given here: a page that isn't https, an iPhone where
-Vazhi isn't on the Home Screen (Safari has no alarms in a tab), and in-app
+Idavazhi isn't on the Home Screen (Safari has no alarms in a tab), and in-app
 browsers such as WhatsApp's or Instagram's.
 
 After planning a trip, **Wake me before <stop>** follows your location and
@@ -181,7 +181,7 @@ planning.
 
 ### Install it as an app
 
-Vazhi is an installable web app (PWA). On Android, Chrome shows **Install Vazhi
+Idavazhi is an installable web app (PWA). On Android, Chrome shows **Install Idavazhi
 on this phone** at the top of the panel; on an iPhone, the button explains
 Safari's **Share > Add to Home Screen**. Installed, it has its own icon, opens
 full screen without the browser bar, and opens even with no internet (planning
@@ -239,16 +239,16 @@ browser.
 
 ### Messages, trip ratings and bus tickets
 
-*About Vazhi* (the last button in the panel) tells why Vazhi was made and has
+*About Idavazhi* (the last button in the panel) tells why Idavazhi was made and has
 a box to message the maker. When a trip ends at the rider's stop, a pop-up asks
 for one to five stars (at most once a day; every time after a demo ride) and
 offers *Buy me a bus ticket*. Both are saved in `data/feedback.db` (never in
 git, 6 a visitor per hour).
 
-- **Read them on this PC:** the *Vazhi Messages* shortcut on the desktop
+- **Read them on this PC:** the *Idavazhi Messages* shortcut on the desktop
   (`python tools/inbox.py --shortcut` makes it; `pythonw tools/inbox.py` opens it).
-  It reads `data/feedback.db` here while Vazhi runs on this computer.
-- **When Vazhi runs on a cloud server:** `python tools/inbox.py --setup
+  It reads `data/feedback.db` here while Idavazhi runs on this computer.
+- **When Idavazhi runs on a cloud server:** `python tools/inbox.py --setup
   https://your-vazhi-address` makes a password (`VAZHI_INBOX_TOKEN` in
   `data/vazhi.env`) and points the app at the server. Copy that one line into
   the server's `data/vazhi.env` and restart it; the app then fetches messages,
@@ -268,7 +268,7 @@ git, 6 a visitor per hour).
   any future date, any CVV, skip saving the card, any OTP. In test mode UPI
   shows only a QR code. The logo shows in Razorpay's window only on the
   public link: Chrome stops outside sites loading anything from 127.0.0.1.
-  Paid tickets show in *Vazhi Messages* and on Telegram.
+  Paid tickets show in *Idavazhi Messages* and on Telegram.
 - **Policy and contact pages:** `/privacy`, `/terms`, `/refunds` and `/contact`
   (linked in the website footer, the About window and next to *Pay*). Razorpay
   checks them before it switches on live payments, and wants an email and

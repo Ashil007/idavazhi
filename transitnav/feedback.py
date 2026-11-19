@@ -90,16 +90,51 @@ def add(body: dict, client: str = "?") -> int:
     return new_id
 
 
+FARE_MODES = {"bus": "Bus", "metro": "Metro", "road": "Auto or taxi", "train": "Train"}
+
+
+def fare(body: dict, client: str = "?") -> int:
+    """A rider says the fare Idavazhi showed for a ride is wrong ("Wrong fare?"
+    under a ride): what was shown, what they paid. Saved and sent like any
+    message; the maker checks it against the official fare rules by hand -
+    nothing here changes a fare by itself."""
+    mode = FARE_MODES.get(str(body.get("mode") or ""))
+    if not mode:
+        raise FeedbackError("Which ride is this about?")
+    try:
+        paid = float(body.get("paid"))
+    except (TypeError, ValueError):
+        raise FeedbackError("How much did you pay? Write it in rupees.") from None
+    if not 1 <= paid <= 10000:
+        raise FeedbackError("How much did you pay? Write it in rupees.")
+    try:
+        km = float(body.get("km") or 0)
+    except (TypeError, ValueError):
+        km = 0.0
+    lines = ["Wrong fare reported: %s" % mode]
+    route = "%s -> %s" % (_clean(body.get("from"), 80) or "?", _clean(body.get("to"), 80) or "?")
+    lines.append(route.replace("\n", " ") + (" (%.1f km)" % km if 0 < km < 2000 else ""))
+    kind = _clean(body.get("kind"), 60).replace("\n", " ")
+    if kind:
+        lines.append("Bus type: " + kind)
+    lines.append("Idavazhi showed: " + (_clean(body.get("shown"), 60).replace("\n", " ") or "no fare"))
+    lines.append("Rider paid: Rs %s" % ("%g" % paid))
+    note = _clean(body.get("note"), 300)
+    if note:
+        lines.append("\n" + note)
+    return add({"text": "\n".join(lines), "page": "wrong fare"}, client)
+
+
 def _message(row) -> str:
     _id, text, contact, page, created, rating = row
     when = time.strftime("%d %b %Y, %I:%M %p", time.localtime(created))
     where = (" - from " + page) if page else ""
     if rating:
         stars = "\u2605" * rating + "\u2606" * (5 - rating)
-        return ("Trip rated on Vazhi (#%d): %s %d/5%s%s\n%s%s"
+        return ("Trip rated on Idavazhi (#%d): %s %d/5%s%s\n%s%s"
                 % (_id, stars, rating, "\n\n" + text if text else "",
                    "\n\n- " + contact if contact else "", when, where))
-    return ("New message on Vazhi (#%d)\n\n%s\n\n- %s\n%s%s"
+    return ("New message on Idavazhi (#%d)\n\n%s\n\n- %s\n%s%s"
             % (_id, text, contact or "no name given", when, where))
 
 
@@ -147,7 +182,7 @@ INBOX_MAX = 2000
 
 
 def inbox() -> dict:
-    """Everything the Vazhi Messages app shows (tools/inbox.py), newest first:
+    """Everything the Idavazhi Messages app shows (tools/inbox.py), newest first:
     messages and trip ratings, and the bus tickets bought through Razorpay.
     Only ever answered to the owner's password (server.py, /api/inbox)."""
     if not os.path.isfile(DB_PATH):
@@ -177,5 +212,5 @@ def support() -> dict:
     if link and not link.startswith("https://"):
         link = ""
     from . import tickets                 # here, not at the top: tickets imports feedback
-    return {"upi": upi, "name": settings.get("VAZHI_UPI_NAME") or "Vazhi", "link": link,
+    return {"upi": upi, "name": settings.get("VAZHI_UPI_NAME") or "Idavazhi", "link": link,
             "razorpay": tickets.enabled()}

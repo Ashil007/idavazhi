@@ -12,7 +12,7 @@ from transitnav.server import serve
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Vazhi")
+    ap = argparse.ArgumentParser(description="Idavazhi")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")
@@ -72,7 +72,7 @@ def main() -> int:
         backup.start_daily_backup()
 
     url = "http://%s:%d/" % (args.host, args.port)
-    print("Vazhi is running at " + url)
+    print("Idavazhi is running at " + url)
     print("Map data (c) OpenStreetMap contributors. Press Ctrl+C to stop.")
     if not args.no_browser:
         webbrowser.open(url)

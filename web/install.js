@@ -1,4 +1,4 @@
-/* Installing Vazhi as an app, and telling the rider when they are offline.
+/* Installing Idavazhi as an app, and telling the rider when they are offline.
  *
  * Android and desktop Chrome/Edge offer an install prompt the page can show
  * from its own button ("beforeinstallprompt"). iPhones have no such prompt:
@@ -41,14 +41,14 @@ var INSTALL = (function () {
       e.preventDefault();                // show our own button, not the browser's bar
       prompt = e;
       $("install-btn").textContent = /Mobi|Android/i.test(navigator.userAgent)
-        ? "Install Vazhi on this phone" : "Install Vazhi as an app";
+        ? "Install Idavazhi on this phone" : "Install Idavazhi as an app";
       show();
     });
     window.addEventListener("appinstalled", function () { prompt = null; hide(); });
 
     // iPhone and iPad (Safari): no prompt to show, so explain the two taps.
     if (isIOS() && !installed()) {
-      $("install-btn").textContent = "Add Vazhi to your home screen";
+      $("install-btn").textContent = "Add Idavazhi to your home screen";
       show();
     }
 
@@ -62,7 +62,7 @@ var INSTALL = (function () {
       } else {
         var how = $("install-how");
         how.innerHTML = "In Safari, tap <b>Share</b> (the square with an arrow) and then " +
-                        "<b>Add to Home Screen</b>. Vazhi then opens like an app, full screen.";
+                        "<b>Add to Home Screen</b>. Idavazhi then opens like an app, full screen.";
         how.hidden = false;
       }
     });

@@ -43,6 +43,20 @@ class FeedbackTest(unittest.TestCase):
             feedback.add({"text": "x" * (feedback.MAX_TEXT + 1)}, "1.2.3.4")
         self.assertEqual(self.rows(), [])
 
+    def test_wrong_fare_report(self):
+        feedback.fare({"mode": "bus", "paid": "30", "kind": "Fast Passenger", "shown": "₹27",
+                       "km": "21.4", "from": "Kuthiyathodu", "to": "Kundanoor",
+                       "note": "conductor said 30"}, "1.2.3.4")
+        text = self.rows()[0][0]
+        for part in ("Wrong fare reported: Bus", "Kuthiyathodu -> Kundanoor (21.4 km)",
+                     "Bus type: Fast Passenger", "Idavazhi showed: ₹27", "Rider paid: Rs 30",
+                     "conductor said 30"):
+            self.assertIn(part, text)
+        for bad in ({"mode": "plane", "paid": 30}, {"mode": "bus", "paid": "lots"},
+                    {"mode": "bus", "paid": 0}, {"mode": "bus", "paid": 99999}):
+            with self.assertRaises(feedback.FeedbackError, msg=str(bad)):
+                feedback.fare(bad, "1.2.3.4")
+
     def test_trip_rating_needs_no_words(self):
         feedback.add({"rating": 4, "page": "trip"}, "1.2.3.4")
         feedback.add({"rating": 5, "text": "Woke me right on time"}, "1.2.3.4")

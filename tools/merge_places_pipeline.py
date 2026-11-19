@@ -1,7 +1,7 @@
 """
 Fetch POIs from Overture Maps (Option 2) and OpenStreetMap (Option 3),
 merge common coordinates, deduplicate, and export both to a spreadsheet (CSV)
-and the Vazhi places database.
+and the Idavazhi places database.
 """
 
 import csv
@@ -202,7 +202,7 @@ def export_csv(places, csv_path):
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["Name", "Category", "Vazhi_Kind", "Latitude", "Longitude", "Address", "Source"])
+        writer.writerow(["Name", "Category", "Idavazhi_Kind", "Latitude", "Longitude", "Address", "Source"])
         for p in places:
             writer.writerow([
                 p["name"],
@@ -216,7 +216,7 @@ def export_csv(places, csv_path):
     print(f"   Successfully wrote {len(places)} places to CSV.")
 
 def import_to_vazhi_db(places, db_path):
-    print(f"5. Importing into Vazhi database {db_path}...")
+    print(f"5. Importing into Idavazhi database {db_path}...")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     db = sqlite3.connect(db_path)
     cur = db.cursor()
@@ -262,7 +262,7 @@ def import_to_vazhi_db(places, db_path):
     print(f"   Added {len(to_insert)} new unique places. Total database places: {total_count}")
 
 def main():
-    print("=== Vazhi POI Harvester & Coordinate Merger ===")
+    print("=== Idavazhi POI Harvester & Coordinate Merger ===")
     overture_places = fetch_overture(BBOX)
     osm_places = fetch_osm_pbf(BBOX)
     combined = overture_places + osm_places

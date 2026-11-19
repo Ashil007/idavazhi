@@ -1,9 +1,9 @@
-"""Design preview of the Vazhi website, on this computer only.
+"""Design preview of the Idavazhi website, on this computer only.
 
 Serves the files in this folder first and falls back to the live site's
 files in ../web for pictures, icons and the video. It listens on 127.0.0.1
 only, so the public tunnel (which points at the real server) never shows it.
-"Open Vazhi" goes to the real app on port 8001.
+"Open Idavazhi" goes to the real app on port 8001.
 
     python design-preview/serve_preview.py [port]
 """
